@@ -20,10 +20,10 @@ import resource
 # The smaller this number the faster the program should run but the larger the number of program stalling collisions 
 
 size = 1000;
-absolute_threshold = 5000
+absolute_threshold = 500
 # This is the threshold for a market in a country to be meaningful
 
-relative_threashold = .25
+relative_threashold = .05
 # This is the relative threshold for a trend to be considered meaningful
 extreme_relative_threashold = 3
 # rsrc = resource.RLIMIT_DATA
@@ -79,7 +79,8 @@ if __name__ == '__main__':
             findLikelyErrors()
         if (not saved):
             save_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors)
-        dataLookUp()
+        if (Im_Ex and values and product_trends and trends and interesting_trends and errors and saved):
+            dataLookUp()
     def multi_thread(function,min_val,max_val,num=None, arg=None):
         global num_threads
         global finished_threads
@@ -295,27 +296,22 @@ if __name__ == '__main__':
             increment += 1
             if ((total - increment) % 50000 == 0):
                 print ("Progress = %f,%f,%f" % (increment,total,100*(float(increment)/float(total))))
-            split_label = row[0]
-            split_label = split_label.split(",")
+            split_label = row[0].split(",")
             year = split_label[0].split(":")[1]
             Im = split_label[1].split(":")[1]
             Ex = split_label[2].split(":")[1]
             product = split_label[3].split(":")[1]
- 
-            product_label = "%s,%s" % (year,product)
-            insert("product_values_%s" % (year),product_label,row[1])
+            value = row[1]
+            
+            insert("product_values_%s" % (year),"%s,%s" % (year,product),value)
              
-            country_label = "%s,%s~%s" %(year,Im,"Import")
-            insert("country_values_%s" %(year),country_label,row[1])
+            insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value)
              
-            country_label = "%s,%s~%s" % (year,Ex,"Export")
-            insert("country_values_%s" %(year),country_label,row[1])
+            insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value)
              
-            country_label = "%s,%s,%s~%s" % (year,Im,product,"Import")
-            insert("country_product_values_%s" %(year),country_label,row[1])
+            insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value)
      
-            country_label = "%s,%s,%s~%s" % (year,Ex,product,"Export")
-            insert("country_product_values_%s" %(year),country_label,row[1])
+            insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value)
              
         end_thread()
 
@@ -327,10 +323,22 @@ if __name__ == '__main__':
             last_year_val = getProduct(product, last_year)
             one_year_val  = getProduct(product, last_year-1)
 #             print (one_year_val)
+            
+            total = 0
+            for y in range(last_year,first_year-1,-1):
+                total += getProduct(product, y)
+                if (y == last_year - 5):
+                    five_year_average = abs(total/6)
+                if (y == last_year - 3):
+                    three_year_average = abs(total/4)
+                if (y == last_year - 1):
+                    one_year_average = abs(total/2)
+            long_average = abs(total/(last_year + 1 - first_year))
+            
             if (one_year_val == 0):
                 one_year_trend = 0
             else:
-                one_year_trend = (last_year_val - one_year_val )/ one_year_val
+                one_year_trend = (last_year_val - one_year_val )/ one_year_average
             one_year_label = "%s-%s" % (product,"one_year_trend")
             
             insert("product_trends",one_year_label,one_year_trend)
@@ -338,7 +346,7 @@ if __name__ == '__main__':
             if (first_year_val == 0):
                 long_trend = 0
             else:
-                long_trend = (last_year_val - first_year_val )/ first_year_val
+                long_trend = (last_year_val - first_year_val )/ long_average
             long_trend_label = "%s-%s" % (product,"long_trend")
 
             insert("product_trends",long_trend_label,long_trend)
@@ -347,7 +355,7 @@ if __name__ == '__main__':
             if (five_year_val == 0):
                 five_year_trend = 0
             else:
-                five_year_trend = (last_year_val - five_year_val )/ five_year_val
+                five_year_trend = (last_year_val - five_year_val )/ five_year_average
               
             five_year_trend_label = "%s-%s" % (product,"five_year_trend")
 
@@ -357,7 +365,7 @@ if __name__ == '__main__':
             if (three_year_val == 0):
                 three_year_trend = 0
             else:
-                three_year_trend = (last_year_val - three_year_val )/ three_year_val
+                three_year_trend = (last_year_val - three_year_val )/ three_year_average
                           
             three_year_trend_label = "%s-%s" % (product,"three_year_trend")
 
@@ -366,29 +374,52 @@ if __name__ == '__main__':
 #             
     def find_trends(is_export):
         # Find the Total Product Trends
+        
+        initilize()
+        
         trends = {}
         tag = "Import"
         if (is_export):
             tag = "Export"
                   
-        for country in country_codes:
+        for country_code in country_codes:
             for product in product_codes:
+                  
+                country = realCountry(country_code)
+                                          
                 first_year_val = getProductCountry(product,country, first_year,is_export)
                 
                 last_year_val  = getProductCountry(product,country, last_year,is_export)
-
+                total = 0
+                for y in range(last_year,first_year-1,-1):
+                    total += getProductCountry(product,country, y,is_export)
+                    if (y == last_year - 5):
+                        five_year_average = abs(total/6)
+                    if (y == last_year - 3):
+                        three_year_average = abs(total/4)
+                    if (y == last_year - 1):
+                        one_year_average = abs(total/2)
+                long_average = abs(total/(last_year + 1 - first_year))
+                
                 if (first_year_val == 0 and last_year_val == 0):
                     continue
                 elif (first_year_val == 0):
                     long_trend = 0
                 else:
-                    long_trend_raw = ((last_year_val - first_year_val )/ first_year_val)
+                    long_trend = ((last_year_val - first_year_val )/ long_average)
+                
+                if (abs(long_trend) > 10):
+                    print (product)
+                    print (country)
+                    print (first_year_val)
+                    print (last_year_val)
+                    print (long_average)
                 
                 # This will normalize the trends for individual countries based on shifting product trends
                 # For example as coal consumption increases gloabally 5% a country increasing coal exports 3% 
                 # is actually 2% below what one would expect so the normalized trend would be -2%
                 
-                    long_trend = long_trend_raw - getProductTrend("%s-%s" % (product,"long_trend"))
+#                     long_trend = long_trend_raw - getProductTrend("%s-%s" % (product,"long_trend"))
 
                 long_trend_label = "%s-%s|%s~%s" % (product,"long_trend",country,tag)
             
@@ -399,9 +430,9 @@ if __name__ == '__main__':
                 if (five_year_val == 0):
                     five_year_trend = 0
                 else:
-                    five_year_trend_raw = (last_year_val - five_year_val )/ five_year_val
+                    five_year_trend = (last_year_val - five_year_val )/ five_year_average
                     
-                    five_year_trend = five_year_trend_raw - getProductTrend("%s-%s" % (product,"five_year_trend"))
+#                     five_year_trend = five_year_trend_raw - getProductTrend("%s-%s" % (product,"five_year_trend"))
         
                 five_year_trend_label = "%s-%s|%s~%s" % (product,"five_year_trend",country,tag)
             
@@ -412,9 +443,9 @@ if __name__ == '__main__':
                 if (three_year_val == 0):
                     three_year_trend = 0
                 else:
-                    three_year_trend_raw = ((last_year_val - three_year_val )/ three_year_val) 
+                    three_year_trend = ((last_year_val - three_year_val )/ three_year_average) 
                     
-                    three_year_trend = three_year_trend_raw - getProductTrend("%s-%s" % (product,"three_year_trend"))
+#                     three_year_trend = three_year_trend_raw - getProductTrend("%s-%s" % (product,"three_year_trend"))
                 
                 three_year_trend_label  = "%s-%s|%s~%s" % (product,"three_year_trend",country,tag)
             
@@ -425,9 +456,9 @@ if __name__ == '__main__':
                 if (one_year_val == 0):
                     one_year_trend = 0
                 else:
-                    one_year_trend_raw = (last_year_val - one_year_val )/ one_year_val
+                    one_year_trend = (last_year_val - one_year_val )/ one_year_average
                     
-                    one_year_trend = one_year_trend_raw - getProductTrend("%s-%s" % (product,"one_year_trend"))
+#                     one_year_trend = one_year_trend_raw - getProductTrend("%s-%s" % (product,"one_year_trend"))
                 
                 one_year_trend_label  = "%s-%s|%s~%s" % (product,"one_year_trend",country,tag)
             
@@ -447,7 +478,7 @@ if __name__ == '__main__':
    
             if (trendline == "five_year_trend"):
                 year = last_year - 5
-            elif (trendline == "long_year_trend"):
+            elif (trendline == "long_trend"):
                 year = first_year
             elif (trendline == "three_year_trend"):
                 year = last_year - 3
@@ -456,15 +487,19 @@ if __name__ == '__main__':
             else:
                 year = last_year
 
-                
+            total = 0    
+            for y in range (year,last_year+1):
+                total += getProduct(product,year)
+            product_val = total
+            if (last_year-year > 0):
+                product_val = total/(last_year-year)                
             
-            product_val = getProduct(product,year)
             trend_val   = trend[1]
             
-            if (product_val > absolute_threshold):
-                if (trend_val > relative_threashold):
-                    if (isProduct(trend[0])):
-                        insert("interesting_trends",trend[0],trend[1])
+            
+            if (abs(product_val) > absolute_threshold):
+                if (abs(trend_val) > relative_threashold):
+                    insert("interesting_trends",trend[0],trend[1])
         print ("Finished Products...")
         trends = readAll("trends")
                 
@@ -472,10 +507,11 @@ if __name__ == '__main__':
             product = trend[0].split("|")[0].split("-")[0]
             trendline = trend[0].split("|")[0].split("-")[1]
             country = trend[0].split("|")[1].split("~")[0]
+            
             tag = trend[0].split("|")[1].split("~")[1]
             if (trendline == "five_year_trend"):
                 year = last_year - 5
-            elif (trendline == "long_year_trend"):
+            elif (trendline == "long_trend"):
                 year = first_year
             elif (trendline == "three_year_trend"):
                 year = last_year - 3
@@ -483,12 +519,18 @@ if __name__ == '__main__':
                 year = last_year - 1
             else:
                 year = last_year
-            product_val = getProductCountry(product,country,year,tag)
+            
+            total = 0    
+            for y in range (year,last_year+1):
+                total += getProductCountry(product,country,y,tag)
+            product_val = total
+            if (last_year-year > 0):
+                product_val = total/(last_year-year) 
             trend_val   = trend[1]
             
-            if (product_val > absolute_threshold):
-                if (trend_val > relative_threashold):
-                    if (isCountry(country) and isProduct(product)):
+            if (abs(product_val) > absolute_threshold):
+                if (abs(trend_val) > relative_threashold):
+                    if (isCountry(country)):
                         label = "%s-%s|%s~%s" % (product,trendline,realCountry(country),tag)
                         insert("interesting_trends",label,trend[1])
 
@@ -499,7 +541,7 @@ if __name__ == '__main__':
         interesting_trends = readAll("interesting_trends")
         
         for trend in interesting_trends:
-            if trend[-1] > 1:
+            if abs(trend[-1]) > 1:
                 insert("errors",trend[0],trend[-1])
 
         
@@ -515,7 +557,6 @@ if __name__ == '__main__':
                     if (average > 0  and (value == 0 and average > extreme_relative_threashold or value/average > extreme_relative_threashold)):
                         label = "%s-%s~%s" % (product,real,"Export")
                         insert("errors",label,value)
-            print(real)
 
         for country in country_codes:
             for product in product_codes:
@@ -551,8 +592,7 @@ if __name__ == '__main__':
                 real_exporter = realCountry(row[2])
                 if (real_exporter != False):
                     exporter = real_exporter
-                else:
-                    print (exporter)
+   
 
                 insert("Im_Ex_Data_%s"% (year),'Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],importer,exporter,row[1]),row[4])
         end_thread()
@@ -632,5 +672,6 @@ if __name__ == '__main__':
         
         
     file_name = r'/home/chris/Downloads/baci92_'
-    run(file_name,True,False,True,True,True,True,True)
-#  
+
+    run(file_name,True,True,False,False,False,False,True)
+    # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
