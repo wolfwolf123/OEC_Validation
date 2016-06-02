@@ -20,12 +20,12 @@ import resource
 # The smaller this number the faster the program should run but the larger the number of program stalling collisions 
 
 size = 1000;
-absolute_threshold = 500
+absolute_threshold = 5000
 # This is the threshold for a market in a country to be meaningful
 
-relative_threashold = .05
+relative_threashold = .25
 # This is the relative threshold for a trend to be considered meaningful
-extreme_relative_threashold = 3
+error_factor = 10
 # rsrc = resource.RLIMIT_DATA
 
 
@@ -41,6 +41,7 @@ if __name__ == '__main__':
     country_codes = {}
     product_codes = {}
     country_product_values = {}
+    saved_trends = {}
     threads = []
     finished_threads = 0
     num_threads = 0 
@@ -55,13 +56,13 @@ if __name__ == '__main__':
         # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
         print("Initilizing...")
         initilize()
-        print("Getting Files...")
         if (not Im_Ex):
+            print("Getting Files...")
             multi_thread(getFiles,first_year,last_year,arg=file_name)
-        print("Populating Tables...")
         if (not values):
+            print("Populating Tables...")
             multi_thread(populate_values,first_year,last_year,num=1)
-        print ("Finished Calculating")
+            print ("Finished Calculating")
 
         if (not product_trends):
             print("Getting Product Trends...")
@@ -143,7 +144,9 @@ if __name__ == '__main__':
             country_product_values_year = readAll("country_product_values_%s" % (year))
             for value in country_product_values_year:
                 country_product_values[value[0]] = value[-1]
-
+            trend = readAll("trends")
+            for value in trend:
+                saved_trends[value[0]] = value[-1]
     def make_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors):    
         if(not values):
             single_thread(make_table, first_year, last_year, "product_values")
@@ -168,8 +171,9 @@ if __name__ == '__main__':
             save(None,"product_trends")
         if (trends):
             save(None,"trends")
-        if (Im_Ex):
-            single_thread(save, first_year, last_year, "Im_Ex_Data")
+#        if (Im_Ex):
+#            single_thread(save, first_year, last_year, "Im_Ex_Data")
+#       This file is too large for github
         if (interesting_trends):
             save(None,"interesting_trends")
         if (errors):
@@ -264,6 +268,13 @@ if __name__ == '__main__':
         
         db.close()
         
+        return output
+    def getTrend(product,country,is_export):
+        try:
+            tag = getExport(is_export)
+            output = saved_trends["%s-%s|%s~%s" % (product,"long_trend",'USA',tag)]
+        except:
+            output = 0
         return output
 
     def end_thread():
@@ -371,17 +382,21 @@ if __name__ == '__main__':
 
             insert("product_trends",three_year_trend_label,three_year_trend)
             
-#             
+#   
+    def getExport(is_export):
+        tag = "Import"
+        if (is_export):
+            tag = "Export"
+        return tag     
     def find_trends(is_export):
         # Find the Total Product Trends
         
         initilize()
         
         trends = {}
-        tag = "Import"
-        if (is_export):
-            tag = "Export"
-                  
+        
+        tag = getExport(is_export)
+        
         for country_code in country_codes:
             for product in product_codes:
                   
@@ -497,9 +512,10 @@ if __name__ == '__main__':
             trend_val   = trend[1]
             
             
-            if (abs(product_val) > absolute_threshold):
-                if (abs(trend_val) > relative_threashold):
-                    insert("interesting_trends",trend[0],trend[1])
+            if (abs(product_val*trend_val) > absolute_threshold):
+                label = "%s$%s" % (trend[0],product_val)
+
+                insert("interesting_trends",label,trend[1])
         print ("Finished Products...")
         trends = readAll("trends")
                 
@@ -518,59 +534,56 @@ if __name__ == '__main__':
             elif (trendline == "one_year_trend"):
                 year = last_year - 1
             else:
+                print ("Horrible Failure")
                 year = last_year
             
             total = 0    
             for y in range (year,last_year+1):
                 total += getProductCountry(product,country,y,tag)
-            product_val = total
-            if (last_year-year > 0):
-                product_val = total/(last_year-year) 
+            product_val = total/(last_year-year + 1) 
             trend_val   = trend[1]
             
-            if (abs(product_val) > absolute_threshold):
-                if (abs(trend_val) > relative_threashold):
-                    if (isCountry(country)):
-                        label = "%s-%s|%s~%s" % (product,trendline,realCountry(country),tag)
-                        insert("interesting_trends",label,trend[1])
+            if (abs(product_val * trend_val) > absolute_threshold):
+                if (isCountry(country)):
+                    label = "%s-%s|%s~%s$%s" % (product,trendline,realCountry(country),tag,product_val)
+                    insert("interesting_trends",label,trend[1])
 
         return interesting_trends
     # This will return the relevent files
     def findLikelyErrors():
-        
+
+            
         interesting_trends = readAll("interesting_trends")
         
         for trend in interesting_trends:
-            if abs(trend[-1]) > 1:
-                insert("errors",trend[0],trend[-1])
+            product_val = float(trend[0].split("$")[-1])
+            trend_val = trend[-1]
+            if (abs(product_val * trend_val) > absolute_threshold * error_factor and trend_val > 1):
+                    insert("errors",trend[0],trend_val)
+        print ("Finished Trends")
+        for bool in [True,False]:
+            for country in country_codes:
+                for product in product_codes:
+                    total = 0
+                    real = realCountry(country)
+                    for year in range(first_year,last_year+1):               
+                        total += getProductCountry(product,real, year,bool)
+                    average = abs(total/ (last_year-first_year))
+                    for year in range(first_year,last_year+1):
+                        value = getProductCountry(product,real, year,bool)
+                        trend_val = getTrend(product,real,bool) 
+                        
+                        try:
+                            multiplier = (1 + (trend_val/(last_year-first_year)) * (first_year - last_year)/2 + (year - first_year))
+                        except:
+                            multiplier = 1
+                        tag = getExport(bool)
 
-        
-        for country in country_codes:
-            for product in product_codes:
-                total = 0
-                real = realCountry(country)
-                for year in range(first_year,last_year+1):               
-                    total += getProductCountry(product,real, last_year,True)
-                average = total/ (last_year-first_year)
-                for year in range(first_year,last_year+1):
-                    value = getProductCountry(product,real, last_year,True)               
-                    if (average > 0  and (value == 0 and average > extreme_relative_threashold or value/average > extreme_relative_threashold)):
-                        label = "%s-%s~%s" % (product,real,"Export")
-                        insert("errors",label,value)
+                        if (abs(value - multiplier * average)  > absolute_threshold * error_factor and abs((value-average)/average) > 1):
+                            label = "%s-%s|%s~%s" % (product,real,year,tag)
+                            insert("errors",label,(value-average)/average)
 
-        for country in country_codes:
-            for product in product_codes:
-                total = 0
-                real = realCountry(country)
-                for year in range(first_year,last_year+1):               
-                    total += getProductCountry(product,real, last_year,False)
-                average = total/ (last_year-first_year)
-                for year in range(first_year,last_year+1):
-                    value = getProductCountry(product,real, last_year,False)               
-                    if (average > 0  and (value == 0 and average > extreme_relative_threashold or value/average > extreme_relative_threashold)):
-                        label = "%s-%s~%s" % (product,real,"Import")
-                        insert("errors",label,value)
-            
+ 
     def getFiles(year,file_name):
         global country_codes
         global product_codes
@@ -661,17 +674,29 @@ if __name__ == '__main__':
                 pass
         return False
     def dataLookUp():
+        type = raw_input("Product or Country")
+
         while(True):
-            args = raw_input("Insert product, country, year, is_export seperated by comma, print 'quit' to exit").split(",")
-            if args[0] == 'quit':
-                break
-            try:
-                print (getProductCountry(args[0],args[1],args[2],args[3]))
-            except:
-                print (args, "Not found")
-        
+            
+            if (type == "Product"):
+                args = raw_input("Insert product and year seperated by comma, print 'quit' to exit").split(",")
+                if args[0] == 'quit':
+                    break
+                try:
+                    print (getProduct(args[0],args[1]))
+                except:
+                    print (args, "Not found")
+            else:
+                args = raw_input("Insert product, country, year, is_export seperated by comma, print 'quit' to exit").split(",")
+                if args[0] == 'quit':
+                    break
+                try:
+                    print (getProductCountry(args[0],args[1],args[2],args[3]))
+                except:
+                    print (args, "Not found")
+            
         
     file_name = r'/home/chris/Downloads/baci92_'
 
-    run(file_name,True,True,False,False,False,False,True)
+    run(file_name,True,True,True,True,True,True,False)
     # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
