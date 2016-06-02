@@ -4,28 +4,26 @@ Created on Jun 2, 2016
 @author: chris
 '''
 import unittest
-import Main
 import SQL_Handler
+import Main 
     
 first_year = 2009
 
 last_year  = 2014
-sql_hand = SQL_Handler("None")
-main = Main()
+
 
 class Tester(unittest.TestCase):
 
 
     def setUp(self):    
-        global sql_hand        
         print ("Beginnig Test")
         
-        sql_hand = main.initilize(False,False,False,False,False,False,"Test_DB")
+        Main.initilize(False,False,False,False,False,False,"Test_DB")
          
     def test_tester(self):
         self.assertEqual(1, 1)
     def test_initialize(self):
-        tables = sql_hand.getTables()
+        tables = SQL_Handler.getTables(Main.getDatabase())
          
         correct_tables = (('Im_Ex_Data_2009',), ('Im_Ex_Data_2010',), ('Im_Ex_Data_2011',),
                           ('Im_Ex_Data_2012',), ('Im_Ex_Data_2013',), ('Im_Ex_Data_2014',), 
@@ -43,7 +41,7 @@ class Tester(unittest.TestCase):
          
         file_name = r'/home/chris/Downloads/Test_'
          
-        main.multi_thread(sql_hand.getFiles,first_year,last_year,arg=file_name)
+        Main.multi_thread(Main.getFiles,first_year,last_year,arg=file_name)
 
 
         self.assertEqual(1, 1)
