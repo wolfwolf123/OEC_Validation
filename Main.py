@@ -8,13 +8,12 @@ This program is used to get a predefined variable from the census API
 Right now it is setup to find the percent of the first variable, white population, in the 
 Second variable.
 '''
-import MySQLdb
-
 import csv
 import threading
 from decimal import Decimal
 import time
-import unittest
+import SQL_Handler
+import Trend_Handler
 
 # This size determines the portion of the file that each thread is processing
 # The smaller this number the faster the program should run but the larger the number of program stalling collisions 
@@ -28,13 +27,11 @@ relative_threashold = .25
 error_factor = 10
 # rsrc = resource.RLIMIT_DATA
 
-database = ""
-
 # resource.setrlimit(rsrc, (1073741824, 1610612736))
-
 first_year = 2009
 
 last_year  = 2014
+
 
 finished_threads = 0
 if __name__ == '__main__':
@@ -46,17 +43,20 @@ if __name__ == '__main__':
     threads = []
     finished_threads = 0
     num_threads = 0 
-
+    
+    sql_hand = SQL_Handler("None")
+    
+    trend_hand = Trend_Handler(sql_hand)
+    
     # Initializes MYSQL Server 
     
 
             
    # This will run the program
     def run (file_name,Im_Ex,values,product_trends,trends,interesting_trends,errors,saved,datalookup):
-        make_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors)
         # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
         print("Initilizing...")
-        initilize()
+        initilize(Im_Ex,values,product_trends,trends,interesting_trends,errors)
         if (not Im_Ex):
             print("Getting Files...")
             multi_thread(getFiles,first_year,last_year,arg=file_name)
@@ -67,12 +67,12 @@ if __name__ == '__main__':
 
         if (not product_trends):
             print("Getting Product Trends...")
-            find_product_trends()
+            trend_hand.find_product_trends()
         if (not trends):
             print ("Getting Export Trends...")
-            find_trends(True)
+            trend_hand.find_trends(True)
             print ("Getting Import Trends...")
-            find_trends(False)
+            trend_hand.find_trends(False)
         if (not interesting_trends):
             print ("Getting Interesting Trends...")
             interesting_trends = findInterestingTrends()
@@ -111,20 +111,26 @@ if __name__ == '__main__':
 
         while (not num_threads - finished_threads == 0):
             print ('Still open %s' % (num_threads - finished_threads))
-            time.sleep(100)
+            time.sleep(5000)
+            
     def single_thread(function,min_val,max_val, arg="None"):
         finished_threads = 0 
         num_threads = 0 
         for val in range(min_val,max_val+1):
             function(val,arg)
- 
-    def initilize():
+                 
+    def initilize(Im_Ex,values,product_trends,trends,interesting_trends,errors,database_name="OEC_DB"):
         global country_codes
         global product_codes
-        global database
-        
-        database = "OEC_DB"
-        
+        global sql_hand
+        global trend_hand
+                
+        sql_hand = SQL_Handler(database_name)
+                
+        make_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors)
+
+        trend_hand = Trend_Handler(sql_hand)
+
         country_codes = {}
         product_codes = {}
         country_file = r'/home/chris/Downloads/country_code_baci92.csv'
@@ -145,27 +151,28 @@ if __name__ == '__main__':
                 row = column[0].split(",")
                 product_codes[row[0]] = row[1]
         for year in range (first_year,last_year+1):
-            country_product_values_year = readAll("country_product_values_%s" % (year))
+            country_product_values_year = sql_hand.readAll("country_product_values_%s" % (year))
             for value in country_product_values_year:
                 country_product_values[value[0]] = value[-1]
-            trend = readAll("trends")
+            trend = sql_hand.readAll("trends")
             for value in trend:
                 saved_trends[value[0]] = value[-1]
-    def make_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors):    
+        return sql_hand
+    def make_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors):
         if(not values):
-            single_thread(make_table, first_year, last_year, "product_values")
-            single_thread(make_table, first_year, last_year, "country_values")
-            single_thread(make_table, first_year, last_year, "country_product_values")
+            single_thread(sql_hand.make_table, first_year, last_year, "product_values")
+            single_thread(sql_hand.make_table, first_year, last_year, "country_values")
+            single_thread(sql_hand.make_table, first_year, last_year, "country_product_values")
         if(not product_trends):
-            make_table(None,"product_trends")
+            sql_hand.make_table(None,"product_trends")
         if (not trends):
-            make_table(None,"trends")
+            sql_hand.make_table(None,"trends")
         if (not Im_Ex):
-            single_thread(make_table, first_year, last_year, "Im_Ex_Data")
+            single_thread(sql_hand.make_table, first_year, last_year, "Im_Ex_Data")
         if (not interesting_trends):
-            make_table(None,"interesting_trends")
+            sql_hand.make_table(None,"interesting_trends")
         if (not errors):
-            make_table(None,"errors")
+            sql_hand.make_table(None,"errors")
     def save_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors):    
         if(values):
             single_thread(save, first_year, last_year, "product_values")
@@ -183,104 +190,7 @@ if __name__ == '__main__':
         if (errors):
             save(None,"errors")
 
-    def make_table(year,table_name):
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)        
-        mysql_cur = db.cursor()
-        if (year == None):    
-            create_table = "CREATE TABLE %s (LABEL VARCHAR(255) PRIMARY KEY, VALUE FLOAT)"
-            delete_table = "DROP TABLE %s"
-            try:
-                mysql_cur.execute(create_table % table_name)
-                db.commit()
-            except:
-                try:
-                    mysql_cur.execute(delete_table % (table_name))
-                    mysql_cur.execute(create_table % (table_name))
-                except:
-                    print("Failed %s_%s Creation" % (table_name))
-                    db.rollback()
-        else:
-            create_table = "CREATE TABLE %s_%s (LABEL VARCHAR(255) PRIMARY KEY, VALUE FLOAT)"
-            delete_table = "DROP TABLE %s_%s"
-            try:
-                mysql_cur.execute(create_table % (table_name,year))
-                db.commit()
-            except:
-                try:
-                    mysql_cur.execute(delete_table % (table_name,year))
-                    mysql_cur.execute(create_table % (table_name,year))
-                    db.commit()
-                except:
-                    print("Failed %s_%s Creation" % (table_name,year))
-                    db.rollback()
-        db.close()
-    def insert(table_name, label, value):
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
-        mysql_cur = db.cursor()
-        try:
-            sql ="""INSERT INTO %s VALUES ('%s',%f)
-                  ON DUPLICATE KEY UPDATE VALUE=VALUE+%f;""" % (table_name,label,float(value),float(value))
-        except:
-            print (table_name,label,value)
-            return False
-        try:
-        # Execute the SQL command
-            mysql_cur.execute(sql)
-#             print("UPDATE")
-            # Commit your changes in the database
-            db.commit()
-        except:
-            # Rollback in case there is any error
-            db.rollback()
-        db.close()
-    def read(table_name,label):
-#         print ("SELECT * FROM %s WHERE LABEL = '%s'" % (table_name,label))
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
-        mysql_cur = db.cursor()
-        mysql_cur.execute("SELECT * FROM %s WHERE LABEL = '%s'" % (table_name,label))
-        
-        output = mysql_cur.fetchall()
-        db.close()
-
-
-        return output
-    def readAll (table_name):
-        
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
-        mysql_cur = db.cursor()
-        mysql_cur.execute("SELECT * FROM %s" % (table_name))
-        
-        output = mysql_cur.fetchall()
-        
-        db.close()
-        
-        return output
-    def readAllCountry (table_name,country):
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
-        
-        mysql_cur = db.cursor()
-        search = []
-        search.append("'%")
-        search.append(country)
-        search.append("%'")
-        
-        value = "".join(search)
-        print ("SELECT * FROM %s WHERE Label LIKE %s" % (table_name,value))
-        mysql_cur.execute( "SELECT * FROM %s WHERE Label LIKE %s" % (table_name,value))
-               
-        output = mysql_cur.fetchall()
-        
-        db.close()
-        
-        return output
-    def getTrend(product,country,is_export):
-        try:
-            tag = getExport(is_export)
-            output = saved_trends["%s-%s|%s~%s" % (product,"long_trend",'USA',tag)]
-        except:
-            output = 0
-        return output
-
+    
     def end_thread():
     
         global finished_threads 
@@ -289,20 +199,20 @@ if __name__ == '__main__':
         finished_threads +=1        
     def save(year,table_name):
         if (year == None):
-            data = readAll(table_name)
+            data = sql_hand.readAll(table_name)
             with open(table_name + ".csv", 'w') as mycsvfile:
                 datawriter = csv.writer(mycsvfile)
                 for row in data:
                     datawriter.writerow(row)
         else:
-            data = readAll("%s_%s" % (table_name,year))
+            data = sql_hand.readAll("%s_%s" % (table_name,year))
             with open(table_name + ".csv", 'w') as mycsvfile:
                 datawriter = csv.writer(mycsvfile)
                 for row in data:
                     datawriter.writerow(row)
     def populate_values(year, value):
   
-        Im_Ex_Data = readAllCountry("Im_Ex_Data_%s" %(year),"NLD")
+        Im_Ex_Data = sql_hand.readAllCountry("Im_Ex_Data_%s" %(year),"NLD")
 
         print("Parsing Data...")
         total = len(Im_Ex_Data)
@@ -318,178 +228,25 @@ if __name__ == '__main__':
             product = split_label[3].split(":")[1]
             value = row[1]
             
-            insert("product_values_%s" % (year),"%s,%s" % (year,product),value)
+            sql_hand.insert("product_values_%s" % (year),"%s,%s" % (year,product),value)
              
-            insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value)
+            sql_hand.insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value)
              
-            insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value)
+            sql_hand.insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value)
              
-            insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value)
+            sql_hand.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value)
      
-            insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value)
+            sql_hand.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value)
              
         end_thread()
 
-    def find_product_trends():
-        for product in product_codes:
-            # Find all the Long, Medium, and Short term Trends in products
-        
-            first_year_val = getProduct(product, first_year)
-            last_year_val = getProduct(product, last_year)
-            one_year_val  = getProduct(product, last_year-1)
-#             print (one_year_val)
-            
-            total = 0
-            for y in range(last_year,first_year-1,-1):
-                total += getProduct(product, y)
-                if (y == last_year - 5):
-                    five_year_average = abs(total/6)
-                if (y == last_year - 3):
-                    three_year_average = abs(total/4)
-                if (y == last_year - 1):
-                    one_year_average = abs(total/2)
-            long_average = abs(total/(last_year + 1 - first_year))
-            
-            if (one_year_val == 0):
-                one_year_trend = 0
-            else:
-                one_year_trend = (last_year_val - one_year_val )/ one_year_average
-            one_year_label = "%s-%s" % (product,"one_year_trend")
-            
-            insert("product_trends",one_year_label,one_year_trend)
-             
-            if (first_year_val == 0):
-                long_trend = 0
-            else:
-                long_trend = (last_year_val - first_year_val )/ long_average
-            long_trend_label = "%s-%s" % (product,"long_trend")
-
-            insert("product_trends",long_trend_label,long_trend)
-              
-            five_year_val = getProduct(product, last_year-5)
-            if (five_year_val == 0):
-                five_year_trend = 0
-            else:
-                five_year_trend = (last_year_val - five_year_val )/ five_year_average
-              
-            five_year_trend_label = "%s-%s" % (product,"five_year_trend")
-
-            insert("product_trends",five_year_trend_label,five_year_trend)
-                         
-            three_year_val = getProduct(product, last_year-3)
-            if (three_year_val == 0):
-                three_year_trend = 0
-            else:
-                three_year_trend = (last_year_val - three_year_val )/ three_year_average
-                          
-            three_year_trend_label = "%s-%s" % (product,"three_year_trend")
-
-            insert("product_trends",three_year_trend_label,three_year_trend)
-            
-#   
-    def getExport(is_export):
-        tag = "Import"
-        if (is_export):
-            tag = "Export"
-        return tag     
-    def find_trends(is_export):
-        # Find the Total Product Trends
-        
-        initilize()
-        
-        trends = {}
-        
-        tag = getExport(is_export)
-        
-        for country_code in country_codes:
-            for product in product_codes:
-                  
-                country = realCountry(country_code)
-                                          
-                first_year_val = getProductCountry(product,country, first_year,is_export)
-                
-                last_year_val  = getProductCountry(product,country, last_year,is_export)
-                total = 0
-                for y in range(last_year,first_year-1,-1):
-                    total += getProductCountry(product,country, y,is_export)
-                    if (y == last_year - 5):
-                        five_year_average = abs(total/6)
-                    if (y == last_year - 3):
-                        three_year_average = abs(total/4)
-                    if (y == last_year - 1):
-                        one_year_average = abs(total/2)
-                long_average = abs(total/(last_year + 1 - first_year))
-                
-                if (first_year_val == 0 and last_year_val == 0):
-                    continue
-                elif (first_year_val == 0):
-                    long_trend = 0
-                else:
-                    long_trend = ((last_year_val - first_year_val )/ long_average)
-                
-                if (abs(long_trend) > 10):
-                    print (product)
-                    print (country)
-                    print (first_year_val)
-                    print (last_year_val)
-                    print (long_average)
-                
-                # This will normalize the trends for individual countries based on shifting product trends
-                # For example as coal consumption increases gloabally 5% a country increasing coal exports 3% 
-                # is actually 2% below what one would expect so the normalized trend would be -2%
-                
-#                     long_trend = long_trend_raw - getProductTrend("%s-%s" % (product,"long_trend"))
-
-                long_trend_label = "%s-%s|%s~%s" % (product,"long_trend",country,tag)
-            
-                insert("trends",long_trend_label,long_trend)
-                
-                five_year_val = getProductCountry(product,country, last_year-5,is_export)
-                
-                if (five_year_val == 0):
-                    five_year_trend = 0
-                else:
-                    five_year_trend = (last_year_val - five_year_val )/ five_year_average
-                    
-#                     five_year_trend = five_year_trend_raw - getProductTrend("%s-%s" % (product,"five_year_trend"))
-        
-                five_year_trend_label = "%s-%s|%s~%s" % (product,"five_year_trend",country,tag)
-            
-                insert("trends",five_year_trend_label,five_year_trend)
-                    
-                three_year_val = getProductCountry(product,country, last_year-3,is_export)
-                
-                if (three_year_val == 0):
-                    three_year_trend = 0
-                else:
-                    three_year_trend = ((last_year_val - three_year_val )/ three_year_average) 
-                    
-#                     three_year_trend = three_year_trend_raw - getProductTrend("%s-%s" % (product,"three_year_trend"))
-                
-                three_year_trend_label  = "%s-%s|%s~%s" % (product,"three_year_trend",country,tag)
-            
-                insert("trends",three_year_trend_label,three_year_trend)
-                                
-                one_year_val  = getProductCountry(product,country, last_year-1,is_export)
-                
-                if (one_year_val == 0):
-                    one_year_trend = 0
-                else:
-                    one_year_trend = (last_year_val - one_year_val )/ one_year_average
-                    
-#                     one_year_trend = one_year_trend_raw - getProductTrend("%s-%s" % (product,"one_year_trend"))
-                
-                one_year_trend_label  = "%s-%s|%s~%s" % (product,"one_year_trend",country,tag)
-            
-                insert("trends",one_year_trend_label,one_year_trend)
-                        
-        return trends
+    
         
     def findInterestingTrends ():
     
         interesting_trends = {}
         
-        product_trends = readAll("product_trends")
+        product_trends = sql_hand.readAll("product_trends")
         
         for trend in product_trends:
             product = trend[0].split("-")[0]
@@ -519,9 +276,9 @@ if __name__ == '__main__':
             if (abs(product_val*trend_val) > absolute_threshold):
                 label = "%s$%s" % (trend[0],product_val)
 
-                insert("interesting_trends",label,trend[1])
+                sql_hand.insert("interesting_trends",label,trend[1])
         print ("Finished Products...")
-        trends = readAll("trends")
+        trends = sql_hand.readAll("trends")
                 
         for trend in trends:
             product = trend[0].split("|")[0].split("-")[0]
@@ -550,20 +307,20 @@ if __name__ == '__main__':
             if (abs(product_val * trend_val) > absolute_threshold):
                 if (isCountry(country)):
                     label = "%s-%s|%s~%s$%s" % (product,trendline,realCountry(country),tag,product_val)
-                    insert("interesting_trends",label,trend[1])
+                    sql_hand.insert("interesting_trends",label,trend[1])
 
         return interesting_trends
     # This will return the relevent files
     def findLikelyErrors():
 
             
-        interesting_trends = readAll("interesting_trends")
+        interesting_trends = sql_hand.readAll("interesting_trends")
         
         for trend in interesting_trends:
             product_val = float(trend[0].split("$")[-1])
             trend_val = trend[-1]
             if (abs(product_val * trend_val) > absolute_threshold * error_factor and trend_val > 1):
-                    insert("errors",trend[0],trend_val)
+                    sql_hand.insert("errors",trend[0],trend_val)
         print ("Finished Trends")
         for bool in [True,False]:
             for country in country_codes:
@@ -575,7 +332,7 @@ if __name__ == '__main__':
                     average = abs(total/ (last_year-first_year))
                     for year in range(first_year,last_year+1):
                         value = getProductCountry(product,real, year,bool)
-                        trend_val = getTrend(product,real,bool) 
+                        trend_val = trend_hand.getTrend(product,real,bool) 
                         
                         try:
                             multiplier = (1 + (trend_val/(last_year-first_year)) * (first_year - last_year)/2 + (year - first_year))
@@ -585,7 +342,7 @@ if __name__ == '__main__':
 
                         if (abs(value - multiplier * average)  > absolute_threshold * error_factor and abs((value-average)/average) > 1):
                             label = "%s-%s|%s~%s" % (product,real,year,tag)
-                            insert("errors",label,(value-average)/average)
+                            sql_hand.insert("errors",label,(value-average)/average)
 
  
     def getFiles(year,file_name):
@@ -611,17 +368,30 @@ if __name__ == '__main__':
                     exporter = real_exporter
    
 
-                insert("Im_Ex_Data_%s"% (year),'Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],importer,exporter,row[1]),row[4])
+                sql_hand.insert("Im_Ex_Data_%s"% (year),'Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],importer,exporter,row[1]),row[4])
         end_thread()
+    def getExport(self,is_export):
+        tag = "Import"
+        if (is_export):
+            tag = "Export"
+        return tag  
+    def getTrend(self,product,country,is_export):
+        try:
+            tag = getExport(is_export)          
+            output = saved_trends["%s-%s|%s~%s" % (product,"long_trend",'USA',tag)]
+        except:
+            output = 0
+        return output
+   
     def getProductTrend(label):
         try:
-            return read("product_trends",label)[0][-1]
+            return sql_hand.read("product_trends",label)[0][-1]
         except:
             return 0
     #    This will run through the collected data and return the Total Product for a given year        
     def getProduct(product, year):
         try:
-            value = read("product_values_%s" % (year),"%s,%s" % (year,product))[0][-1]
+            value = sql_hand.read("product_values_%s" % (year),"%s,%s" % (year,product))[0][-1]
 #             print ("Value",value)
             return value
         except:
@@ -650,7 +420,7 @@ if __name__ == '__main__':
             tag = "Export"
         
         try:
-            return(read("country_product_values_%s" % (year),"%s,%s~%s" % (year,country,tag))[0][-1])
+            return(sql_hand.read("country_product_values_%s" % (year),"%s,%s~%s" % (year,country,tag))[0][-1])
         except:
             return 0
          
@@ -666,6 +436,7 @@ if __name__ == '__main__':
             if (real_country == country):
                 return True
         return False
+    
     def realCountry(country):
         try:
             return country_codes[str(int(country))]
@@ -702,25 +473,6 @@ if __name__ == '__main__':
         
     file_name = r'/home/chris/Downloads/baci92_'
 
-#     run(file_name,True,True,True,True,True,True,True,False)
+#     run(file_name,True,True,False,False,False,True,True,False)
     # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
     
-    
-    class Tester(unittest.TestCase):
-        def setUp(self):
-            global database
-            
-            datebase = "Test_DB"
-            
-            print ("Beginnig Test")
-            
-        def test_tester(self):
-            self.assertEqual(1, 1)
-            
-        def test_tester(self):
-            self.assertEqual(1, 1)
-        
-        def tearDown(self):
-            print("End Test")
-                
-    unittest.main()
