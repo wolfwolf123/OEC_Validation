@@ -14,7 +14,7 @@ import csv
 import threading
 from decimal import Decimal
 import time
-import resource
+import unittest
 
 # This size determines the portion of the file that each thread is processing
 # The smaller this number the faster the program should run but the larger the number of program stalling collisions 
@@ -28,6 +28,7 @@ relative_threashold = .25
 error_factor = 10
 # rsrc = resource.RLIMIT_DATA
 
+database = ""
 
 # resource.setrlimit(rsrc, (1073741824, 1610612736))
 
@@ -51,7 +52,7 @@ if __name__ == '__main__':
 
             
    # This will run the program
-    def run (file_name,Im_Ex,values,product_trends,trends,interesting_trends,errors,saved):
+    def run (file_name,Im_Ex,values,product_trends,trends,interesting_trends,errors,saved,datalookup):
         make_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors)
         # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
         print("Initilizing...")
@@ -80,7 +81,7 @@ if __name__ == '__main__':
             findLikelyErrors()
         if (not saved):
             save_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors)
-        if (Im_Ex and values and product_trends and trends and interesting_trends and errors and saved):
+        if (datalookup):
             dataLookUp()
     def multi_thread(function,min_val,max_val,num=None, arg=None):
         global num_threads
@@ -120,7 +121,10 @@ if __name__ == '__main__':
     def initilize():
         global country_codes
         global product_codes
-
+        global database
+        
+        database = "OEC_DB"
+        
         country_codes = {}
         product_codes = {}
         country_file = r'/home/chris/Downloads/country_code_baci92.csv'
@@ -180,7 +184,7 @@ if __name__ == '__main__':
             save(None,"errors")
 
     def make_table(year,table_name):
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db="OEC_DB")        
+        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)        
         mysql_cur = db.cursor()
         if (year == None):    
             create_table = "CREATE TABLE %s (LABEL VARCHAR(255) PRIMARY KEY, VALUE FLOAT)"
@@ -211,7 +215,7 @@ if __name__ == '__main__':
                     db.rollback()
         db.close()
     def insert(table_name, label, value):
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db="OEC_DB")
+        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
         mysql_cur = db.cursor()
         try:
             sql ="""INSERT INTO %s VALUES ('%s',%f)
@@ -231,7 +235,7 @@ if __name__ == '__main__':
         db.close()
     def read(table_name,label):
 #         print ("SELECT * FROM %s WHERE LABEL = '%s'" % (table_name,label))
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db="OEC_DB")
+        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
         mysql_cur = db.cursor()
         mysql_cur.execute("SELECT * FROM %s WHERE LABEL = '%s'" % (table_name,label))
         
@@ -242,7 +246,7 @@ if __name__ == '__main__':
         return output
     def readAll (table_name):
         
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db="OEC_DB")
+        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
         mysql_cur = db.cursor()
         mysql_cur.execute("SELECT * FROM %s" % (table_name))
         
@@ -252,7 +256,7 @@ if __name__ == '__main__':
         
         return output
     def readAllCountry (table_name,country):
-        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db="OEC_DB")
+        db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
         
         mysql_cur = db.cursor()
         search = []
@@ -698,5 +702,25 @@ if __name__ == '__main__':
         
     file_name = r'/home/chris/Downloads/baci92_'
 
-    run(file_name,True,True,True,True,True,True,False)
+#     run(file_name,True,True,True,True,True,True,True,False)
     # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
+    
+    
+    class Tester(unittest.TestCase):
+        def setUp(self):
+            global database
+            
+            datebase = "Test_DB"
+            
+            print ("Beginnig Test")
+            
+        def test_tester(self):
+            self.assertEqual(1, 1)
+            
+        def test_tester(self):
+            self.assertEqual(1, 1)
+        
+        def tearDown(self):
+            print("End Test")
+                
+    unittest.main()
