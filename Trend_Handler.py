@@ -68,9 +68,10 @@ def find_product_trends(product_codes):
         SQL_Handler.insert("product_trends",three_year_trend_label,three_year_trend,Main.database)
         
 
-def find_trends(country_codes,product_codes,is_export):
+def find_trends(database,country_codes,product_codes,is_export):
     # Find the Total Product Trends
-    Main.fill_country_values()
+        
+    Main.fill_country_values(database)
         
     trends = {}
     
