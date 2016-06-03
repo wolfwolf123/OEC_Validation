@@ -40,6 +40,7 @@ threads = []
 finished_threads = 0
 num_threads = 0 
 
+database = ""
 
 finished_threads = 0
     
@@ -58,7 +59,7 @@ def run (file_name,Im_Ex,values,product_trends,trends,interesting_trends,errors,
         multi_thread(getFiles,first_year,last_year,arg=file_name)
     if (not values):
         print("Populating Tables...")
-        multi_thread(populate_values,first_year,last_year,num=1)
+        multi_thread(populate_values,first_year,last_year,num=1,arg="NLD")
         print ("Finished Calculating")
 
     if (not product_trends):
@@ -71,7 +72,7 @@ def run (file_name,Im_Ex,values,product_trends,trends,interesting_trends,errors,
         Trend_Handler.find_trends(country_codes,product_codes,False)
     if (not interesting_trends):
         print ("Getting Interesting Trends...")
-        interesting_trends = findInterestingTrends()
+        findInterestingTrends()
     if (not errors):
         print("Calculating Errors")
         findLikelyErrors()
@@ -105,7 +106,7 @@ def multi_thread(function,min_val,max_val,num=None, arg=None):
         t.start()
         num_threads += 1
 
-    while (not num_threads - finished_threads == 0):
+    while ( num_threads > finished_threads):
         print ('Still open %s' % (num_threads - finished_threads))
         time.sleep(5)
         
@@ -143,14 +144,15 @@ def initilize(Im_Ex,values,product_trends,trends,interesting_trends,errors,datab
         for column in import_reader:
             row = column[0].split(",")
             product_codes[row[0]] = row[1]
+    fill_country_values()
+def fill_country_values():
     for year in range (first_year,last_year+1):
         country_product_values_year = SQL_Handler.readAll("country_product_values_%s" % (year),database)
         for value in country_product_values_year:
             country_product_values[value[0]] = value[-1]
         trend = SQL_Handler.readAll("trends",database)
         for value in trend:
-            saved_trends[value[0]] = value[-1]
-            
+            saved_trends[value[0]] = value[-1]            
 def make_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors):
     if(not values):
         single_thread(SQL_Handler.make_table, first_year, last_year, ("product_values",database))
@@ -203,9 +205,12 @@ def save(year,table_name):
             datawriter = csv.writer(mycsvfile)
             for row in data:
                 datawriter.writerow(row)
-def populate_values(year, value):
-
-    Im_Ex_Data = SQL_Handler.readAllCountry("Im_Ex_Data_%s" %(year),"NLD",database)
+def populate_values(year, country = None):
+    
+    if (country == None):
+        Im_Ex_Data = SQL_Handler.readAll("Im_Ex_Data_%s" %(year),database)
+    else:
+        Im_Ex_Data = SQL_Handler.readAllCountry("Im_Ex_Data_%s" %(year),country,database)
 
     print("Parsing Data...")
     total = len(Im_Ex_Data)
@@ -236,7 +241,7 @@ def populate_values(year, value):
 
     
 def findInterestingTrends ():
-
+        
     interesting_trends = {}
     
     product_trends = SQL_Handler.readAll("product_trends",database)
@@ -259,9 +264,8 @@ def findInterestingTrends ():
         total = 0    
         for y in range (year,last_year+1):
             total += getProduct(product,year)
-        product_val = total
-        if (last_year-year > 0):
-            product_val = total/(last_year-year)                
+
+        product_val = total/(last_year-year)+1                
         
         trend_val   = trend[1]
         
@@ -274,6 +278,7 @@ def findInterestingTrends ():
     trends = SQL_Handler.readAll("trends",database)
             
     for trend in trends:
+                
         product = trend[0].split("|")[0].split("-")[0]
         trendline = trend[0].split("|")[0].split("-")[1]
         country = trend[0].split("|")[1].split("~")[0]
@@ -296,11 +301,9 @@ def findInterestingTrends ():
             total += getProductCountry(product,country,y,tag)
         product_val = total/(last_year-year + 1) 
         trend_val   = trend[1]
-        
         if (abs(product_val * trend_val) > absolute_threshold):
-            if (isCountry(country)):
-                label = "%s-%s|%s~%s$%s" % (product,trendline,realCountry(country),tag,product_val)
-                SQL_Handler.insert("interesting_trends",label,trend[1],database)
+            label = "%s-%s|%s~%s$%s" % (product,trendline,country,tag,product_val)
+            SQL_Handler.insert("interesting_trends",label,trend[1],database)
 
     return interesting_trends
 # This will return the relevent files
@@ -312,31 +315,36 @@ def findLikelyErrors():
     for trend in interesting_trends:
         product_val = float(trend[0].split("$")[-1])
         trend_val = trend[-1]
-        if (abs(product_val * trend_val) > absolute_threshold * error_factor and trend_val > 1):
+        if (abs(product_val * trend_val) > absolute_threshold * error_factor and abs(trend_val) >= .5):
                 SQL_Handler.insert("errors",trend[0],trend_val,database)
     print ("Finished Trends")
     for bool in [True,False]:
+        tag = getExport(bool)
         for country in country_codes:
             for product in product_codes:
                 total = 0
                 real = realCountry(country)
                 for year in range(first_year,last_year+1):               
-                    total += getProductCountry(product,real, year,bool)
-                average = abs(total/ (last_year-first_year))
+                    total += getProductCountry(product,real, year,tag)
+                average = total/ (last_year-first_year)
                 for year in range(first_year,last_year+1):
-                    value = getProductCountry(product,real, year,bool)
+                    value = getProductCountry(product,real, year,tag)
                     trend_val = getTrend(product,real,bool) 
-                    
+                    average = abs((total/(last_year-first_year)) - value/(last_year-first_year))
+
                     try:
-                        multiplier = (1 + (trend_val/(last_year-first_year)) * (first_year - last_year)/2 + (year - first_year))
+                        multiplier = (1 + (trend_val/(last_year-first_year)) * ((first_year - last_year)/2 + (year - first_year)))
                     except:
                         multiplier = 1
+
                     tag = getExport(bool)
 
-                    if (abs(value - multiplier * average)  > absolute_threshold * error_factor and abs((value-average)/average) > 1):
+                    if (average > 0 and abs(value - multiplier * average)  > absolute_threshold * error_factor and abs((value-average)/average) >= .5):
                         label = "%s-%s|%s~%s" % (product,real,year,tag)
                         SQL_Handler.insert("errors",label,(value-average)/average,database)
-
+                    elif (value == 0 and average > absolute_threshold * error_factor):
+                        label = "%s-%s|%s~%s" % (product,real,year,tag)
+                        SQL_Handler.insert("errors",label,(value-average)/average,database)
 
 def getFiles(year,file_name):
     global country_codes
@@ -396,13 +404,14 @@ def getProduct(product, year):
 #         return output
 
 #    This will run through the collected data and return the Total Product for a given year and country
-def getProductCountry(product,country,year,is_export):
-    tag = "Import"
-    if (is_export):
-        tag = "Export"
+def getProductCountry(product,country,year,tag):
     try:
         return country_product_values["%s,%s,%s~%s" % (year,country,product,tag)]
     except:
+#         print ("Tag","%s,%s,%s~%s" % (year,country,product,tag))
+#         for i in country_product_values:
+#             print (country_product_values[i],i)
+#         time.sleep(50)
         return 0
 
 #         country_label = "Year:%s,County:%s,Product:%s~%s" % (year,country,product,tag)
