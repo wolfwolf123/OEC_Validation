@@ -80,7 +80,7 @@ def find_trends(database,country_codes,product_codes,is_export):
     for country_code in country_codes:
         for product in product_codes:
               
-                    
+            product = product_codes[product]        
 
             country = Main.realCountry(country_code)
                                       

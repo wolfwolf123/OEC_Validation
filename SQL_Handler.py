@@ -110,5 +110,23 @@ def readAllCountry (table_name,country,database):
     
     return output
 
+def readAllCountryExport (table_name,country,database):
+    db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
+    
+    mysql_cur = db.cursor()
+    search = []
+    search.append("'%")
+    search.append("Exporter:" + country)
+    search.append("%'")
+    
+    value = "".join(search)
+    print ("SELECT * FROM %s WHERE Label LIKE %s" % (table_name,value))
+    mysql_cur.execute( "SELECT * FROM %s WHERE Label LIKE %s" % (table_name,value))
+           
+    output = mysql_cur.fetchall()
+    
+    db.close()
+    
+    return output
 
         

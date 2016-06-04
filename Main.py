@@ -22,9 +22,12 @@ size = 1000;
 absolute_threshold = 500
 # This is the threshold for a market in a country to be meaningful
 
-relative_threashold = .25
+relative_threashold = 10
+
+market_threshold = .25
+
 # This is the relative threshold for a trend to be considered meaningful
-error_factor = 10
+error_factor = 20
 # rsrc = resource.RLIMIT_DATA
 
 # resource.setrlimit(rsrc, (1073741824, 1610612736))
@@ -127,24 +130,36 @@ def initilize(Im_Ex,values,product_trends,trends,interesting_trends,errors,datab
 
     country_codes = {}
     product_codes = {}
-    country_file = r'/home/chris/Downloads/country_code_baci92.csv'
-    product_file = r'/home/chris/Downloads/product_code_baci92.csv'
+    country_file = r'/home/chris/Downloads/country_codes.csv'
+    product_file = r'/home/chris/Downloads/product_codes.csv'
 
     with open(country_file) as csvfile:
         import_reader = csv.reader(csvfile, delimiter=';')
         for column in import_reader:
             row = column[0].split(",")
             value = row[0]
-            if (row[0] == ''):
-                value = row [2]
-            country_codes[row[3]] = value
+            code  = row[3]
+            if (code == ""):
+                continue
+#             print(code)
+            codes = code.split('|')
+            for c in codes:
+                try:
+                    country_codes[int(c.strip('"'))] = value
+                except:
+                    pass
+
 
     with open(product_file) as csvfile:
         import_reader = csv.reader(csvfile, delimiter=';')
         for column in import_reader:
             row = column[0].split(",")
-            product_codes[row[0]] = row[1]
+            product_codes[row[1]] = row[0]
     fill_country_values(database_name)
+def reset(Im_Ex,values,product_trends,trends,database_name="OEC_DB"):
+    
+    initilize(Im_Ex,values,product_trends,trends,False,False,database_name)
+
 def fill_country_values(database_name):
     global database 
     
@@ -215,7 +230,7 @@ def populate_values(year, country = None):
     if (country == None):
         Im_Ex_Data = SQL_Handler.readAll("Im_Ex_Data_%s" %(year),database)
     else:
-        Im_Ex_Data = SQL_Handler.readAllCountry("Im_Ex_Data_%s" %(year),country,database)
+        Im_Ex_Data = SQL_Handler.readAllCountryExport("Im_Ex_Data_%s" %(year),country,database)
 
     print("Parsing Data...")
     total = len(Im_Ex_Data)
@@ -230,6 +245,8 @@ def populate_values(year, country = None):
         Ex = split_label[2].split(":")[1]
         product = split_label[3].split(":")[1]
         value = row[1]
+        
+        product = product_codes[product]
         
         SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product),value,database)
          
@@ -254,6 +271,8 @@ def findInterestingTrends ():
     for trend in product_trends:
         product = trend[0].split("-")[0]
         trendline = trend[0].split("-")[1]
+
+        product = product_codes[product]
 
         if (trendline == "five_year_trend"):
             year = last_year - 5
@@ -324,45 +343,53 @@ def findLikelyErrors():
                 SQL_Handler.insert("errors",trend[0],trend_val,database)
     print ("Finished Trends")
     for bool in [True,False]:
+        diff = last_year-first_year
         tag = getExport(bool)
+        error_absolute = absolute_threshold * error_factor
         for country in country_codes:
             for product in product_codes:
+                
+                product = product_codes[product]
+                
                 total = 0
+                market_val_total = 0
                 real = realCountry(country)
                 for year in range(first_year,last_year+1):               
                     total += getProductCountry(product,real, year,tag)
-                average = total/ (last_year-first_year)
-                for year in range(first_year,last_year+1):
+                if (total == 0):
+                    continue
+           
+                average = total/ diff
+
+                for year in range(first_year,last_year):
                     value = getProductCountry(product,real, year,tag)
                     trend_val = getTrend(product,real,bool) 
-                    out_average = abs((total/(last_year-first_year)) - value/(last_year-first_year))
+                    out_average = abs(average - value/diff)
                     if (out_average == 0):
                         out_average = .01
                         #This means that jumps from averages of zero will equate to 100 times increases
-                    try:
-                        multiplier = (1 + (trend_val/(last_year-first_year)) * ((first_year - last_year)/2 + (year - first_year)))
-                    except:
-                        multiplier = 1
 
-                    tag = getExport(bool)
-                    if (product == "151800" and real == "FIN"):
-                        print ("%s-%s|%s~%s" % (product,real,year,tag))
-                        print (average)
-                        print (total)
-                        print (value)
-                        print ((value-out_average)/out_average)
-                        
-                    if (average > 0 and abs(value - multiplier * average)  > absolute_threshold * error_factor and abs((value-average)/average) >= .5):
-                        label = "%s-%s|%s~%s" % (product,real,year,tag)
-                        output = (value-out_average)/out_average
-                        if (out_average == .01):
-                            output = 100
+                    multiplier = (1 + (trend_val/diff) * (-diff/2 + (year - first_year)))
+                    if (abs(value - multiplier * average)  > error_absolute and abs((value-out_average)/out_average) >= relative_threashold
+                        or value == 0 and average > absolute_threshold * error_factor):
+                        for y in range(first_year,last_year+1):               
+                            market_val_total += getProduct(product, y)
+                        market_val = market_val_total/ diff
+                        if (value/market_val > market_threshold):    
+                            label = "%s-%s|%s~%s" % (product,real,year,tag)
+                            if (real == "DOM"):
+                                print (label)
+                                print (out_average)
+                                print (value)
+                                print (multiplier)
+                                print (average)
+                                print (abs(value - multiplier * average) )
+                            output = (value-out_average)/out_average
+                            if (out_average == .01):
+                                output = 100000
+                            
+                            SQL_Handler.insert("errors",label,output,database)
 
-                        SQL_Handler.insert("errors",label,output,database)
-                    elif (value == 0 and average > absolute_threshold * error_factor):
-                        label = "%s-%s|%s~%s" % (product,real,year,tag)
-                        print (label,(value-out_average)/out_average,"Zero")
-                        SQL_Handler.insert("errors",label,(value-out_average)/out_average,database)
 
 def getFiles(year,file_name):
     global country_codes
@@ -496,6 +523,6 @@ if __name__ == '__main__':
         
     file_name = r'/home/chris/Downloads/baci92_'
 
-    run(file_name,True,True,True,True,True,True,True,False)
+    run(file_name,True,True,True,True,True,False,False,False)
     # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,aved,datalookup
     
