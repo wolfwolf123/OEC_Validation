@@ -65,7 +65,7 @@ def run (file_name,Im_Ex,values,product_trends,trends,interesting_trends,errors,
     initilize(Im_Ex,values,product_trends,trends,interesting_trends,errors)
     if (not values):
         print("Getting Files...")
-        multi_thread(getFiles,first_year,last_year,arg=(file_name,"NLD"))
+        multi_thread(getFiles,first_year,last_year,arg=file_name)
         # This will transfer information from files into MySQL
     if (not Im_Ex):
         multi_thread(populate_values,first_year,last_year,num=1,arg="NLD")
@@ -225,8 +225,7 @@ def save(year,table_name):
             for row in data:
                 datawriter.writerow(row)
 
-def getFiles(year,arg):
-    (file_name,country) = arg
+def getFiles(year,file_name):
     print (year)
     file_location = file_name + str(year) + '.csv'
     with open(file_location) as csvfile:
@@ -236,25 +235,13 @@ def getFiles(year,arg):
                 row = column[0].split(",")
                 importer = country_codes[int(row[3])]
                 exporter = country_codes[int(row[2])]
+                product  = product_codes[str(int(row[1]))]
 
-                if (importer == country or exporter == country):
-                    populate_value(year,importer,exporter,product_codes[str(int(row[1]))],row[4])
-#                 SQL_Handler.insert("Im_Ex_Data_%s" % (year),'Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],importer,exporter,product),row[4],database)
+                SQL_Handler.insert("Im_Ex_Data_%s" % (year),'Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],importer,exporter,product),row[4],database)
             except:    
                 print ('Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],row[3],row[2],row[1]))
     end_thread()
-def populate_value(year,Im,Ex,product,value):
-    
-    SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product),value,database)
-         
-    SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value,database)
-     
-    SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value,database)
-     
-    SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value,database)
-    
-    SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value,database)
-    
+
 def populate_values(year, country = None):
     
     print("Populating Tables...")
