@@ -11,15 +11,18 @@ last_year  = 2014
 import SQL_Handler  
 import Main
 
-def find_product_trends(product_codes):
-    for product in product_codes:
+def find_product_trends(database,product_codes):
+    
+    print("Getting Product Trends...")
+    
+    Main.fill_country_values(database)
+
+
+    for hs,product in product_codes.items():
         # Find all the Long, Medium, and Short term Trends in products
     
-        first_year_val =Main.getProduct(product, first_year)
-        last_year_val = Main.getProduct(product, last_year)
-        one_year_val  = Main.getProduct(product, last_year-1)
 #             print (one_year_val)
-        
+
         total = 0
         for y in range(last_year,first_year-1,-1):
             total += Main.getProduct(product, y)
@@ -30,6 +33,15 @@ def find_product_trends(product_codes):
             if (y == last_year - 1):
                 one_year_average = abs(total/2)
         long_average = abs(total/(last_year + 1 - first_year))
+    
+        if (total == 0):
+            continue
+        
+        first_year_val =Main.getProduct(product, first_year)
+        last_year_val = Main.getProduct(product, last_year)
+        one_year_val  = Main.getProduct(product, last_year-1)
+        
+        print (product)
         
         if (one_year_val == 0):
             one_year_trend = 0
@@ -68,26 +80,18 @@ def find_product_trends(product_codes):
         SQL_Handler.insert("product_trends",three_year_trend_label,three_year_trend,Main.database)
         
 
-def find_trends(database,country_codes,product_codes,is_export):
+def find_trends(country_codes,product_codes,is_export):
     # Find the Total Product Trends
-        
-    Main.fill_country_values(database)
-        
+                
     trends = {}
     
     tag = Main.getExport(is_export)
     
-    for country_code in country_codes:
-        for product in product_codes:
-              
-            product = product_codes[product]        
-
-            country = Main.realCountry(country_code)
-                                      
-            first_year_val = Main.getProductCountry(product,country, first_year,tag)
-            
-            last_year_val  = Main.getProductCountry(product,country, last_year,tag)
-         
+    print ("Getting %s Trends..." % (tag))    
+    
+    for id,country in country_codes.items():
+        for hs,product in product_codes.items():
+                                                       
             total = 0
             for y in range(last_year,first_year,-1):
                 total += Main.getProductCountry(product,country, y-1,tag)
@@ -98,10 +102,17 @@ def find_trends(database,country_codes,product_codes,is_export):
                 if (y == last_year):
                     one_year_average = abs(total)
             long_average = abs(total/(last_year - first_year))
-            
-            if (first_year_val == 0 and last_year_val == 0 and long_average == 0):
+            if (total == 0):
                 continue
-            elif (first_year_val == 0):
+
+
+            first_year_val = Main.getProductCountry(product,country, first_year,tag)
+            
+            last_year_val  = Main.getProductCountry(product,country, last_year,tag)
+            
+
+
+            if (first_year_val == 0):
                 long_trend = 0
             else:
                 long_trend = ((last_year_val - first_year_val )/ long_average)

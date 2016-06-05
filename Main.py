@@ -1,83 +1,83 @@
 
 '''
-Created on Oct 7, 2015
 
 @author: Chris Briere
 
-This program is used to get a predefined variable from the census API
-Right now it is setup to find the percent of the first variable, white population, in the 
-Second variable.
+This program serves to find possible erroneous data point in the data provided by BACI
+
 '''
 import csv
 import threading
-from decimal import Decimal
 import time
 import SQL_Handler
 import Trend_Handler
 
-# This size determines the portion of the file that each thread is processing
-# The smaller this number the faster the program should run but the larger the number of program stalling collisions 
-
-size = 1000;
 absolute_threshold = 500
-# This is the threshold for a market in a country to be meaningful
+# This is the threshold for a market in a country to be meaningful in thousands
 
 relative_threashold = 10
+# This is the threshold for a change to be considered relevent
 
 market_threshold = .25
+# This is the percent of the market that a trade must make up inorder to be considered relevent
 
-# This is the relative threshold for a trend to be considered meaningful
 error_factor = 20
-# rsrc = resource.RLIMIT_DATA
+# This is the additional factor that turns a point from being interesting into being a possible error
 
-# resource.setrlimit(rsrc, (1073741824, 1610612736))
 first_year = 2009
+# The first year that is recorded
 
 last_year  = 2014
+# The last year that is recorded
 
 country_codes = {}
+# This stores the country_id such that the hs92 value is the key and the OEC value is the value
+
 product_codes = {}
+# This stores the product_id such that the hs92 value is the key and the OEC value is the value
+
 country_product_values = {}
+# This stores the information regarding the trade between two countries to increase efficency
+
 saved_trends = {}
+# This stores the information regarding trends in trade between two countries to increase efficency
+
 threads = []
 finished_threads = 0
 num_threads = 0 
 
+# These allow for multi-threading
+
 database = ""
 
-finished_threads = 0
-    
-    
-# Initializes MYSQL Server 
+# This denotes the database that is being connected to as a global varible
 
+    
 
         
 # This will run the program
 def run (file_name,Im_Ex,values,product_trends,trends,interesting_trends,errors,saved,datalookup):
-    # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends
+    # These Inputs are booleans, with the exception of file_name which denotes the file from which to retrieve the data, of what parts of the code
+    # Should be used. If a value is denoted false the associated table WILL BE DELETED to be replaced with new values. Saved, if True, will save all
+    # Other values that are denoted as completed, e.g. are True. Datalookup will allow you to search collected data
+    
     print("Initilizing...")
     initilize(Im_Ex,values,product_trends,trends,interesting_trends,errors)
-    if (not Im_Ex):
-        print("Getting Files...")
-        multi_thread(getFiles,first_year,last_year,arg=file_name)
     if (not values):
-        print("Populating Tables...")
+        print("Getting Files...")
+        multi_thread(getFiles,first_year,last_year,arg=(file_name,"NLD"))
+        # This will transfer information from files into MySQL
+    if (not Im_Ex):
         multi_thread(populate_values,first_year,last_year,num=1,arg="NLD")
         print ("Finished Calculating")
-
     if (not product_trends):
-        print("Getting Product Trends...")
         Trend_Handler.find_product_trends(product_codes)
     if (not trends):
-        print ("Getting Export Trends...")
         Trend_Handler.find_trends(database,country_codes,product_codes,True)
-        print ("Getting Import Trends...")
         Trend_Handler.find_trends(database,country_codes,product_codes,False)
     if (not interesting_trends):
-        print ("Getting Interesting Trends...")
         findInterestingTrends()
     if (not errors):
-        print("Calculating Errors")
         findLikelyErrors()
     if (not saved):
         save_tables(Im_Ex,values,product_trends,trends,interesting_trends,errors)
@@ -111,7 +111,7 @@ def multi_thread(function,min_val,max_val,num=None, arg=None):
 
     while ( num_threads > finished_threads):
         print ('Still open %s' % (num_threads - finished_threads))
-        time.sleep(5)
+        time.sleep(250)
         
 def single_thread(function,min_val,max_val, arg="None"):
     finished_threads = 0 
@@ -148,7 +148,6 @@ def initilize(Im_Ex,values,product_trends,trends,interesting_trends,errors,datab
                     country_codes[int(c.strip('"'))] = value
                 except:
                     pass
-
 
     with open(product_file) as csvfile:
         import_reader = csv.reader(csvfile, delimiter=';')
@@ -225,7 +224,40 @@ def save(year,table_name):
             datawriter = csv.writer(mycsvfile)
             for row in data:
                 datawriter.writerow(row)
+
+def getFiles(year,arg):
+    (file_name,country) = arg
+    print (year)
+    file_location = file_name + str(year) + '.csv'
+    with open(file_location) as csvfile:
+        import_reader = csv.reader(csvfile, delimiter=';')
+        for column in import_reader:
+            try:
+                row = column[0].split(",")
+                importer = country_codes[int(row[3])]
+                exporter = country_codes[int(row[2])]
+
+                if (importer == country or exporter == country):
+                    populate_value(year,importer,exporter,product_codes[str(int(row[1]))],row[4])
+#                 SQL_Handler.insert("Im_Ex_Data_%s" % (year),'Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],importer,exporter,product),row[4],database)
+            except:    
+                print ('Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],row[3],row[2],row[1]))
+    end_thread()
+def populate_value(year,Im,Ex,product,value):
+    
+    SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product),value,database)
+         
+    SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value,database)
+     
+    SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value,database)
+     
+    SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value,database)
+    
+    SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value,database)
+    
 def populate_values(year, country = None):
+    
+    print("Populating Tables...")
     
     if (country == None):
         Im_Ex_Data = SQL_Handler.readAll("Im_Ex_Data_%s" %(year),database)
@@ -243,11 +275,11 @@ def populate_values(year, country = None):
         year = split_label[0].split(":")[1]
         Im = split_label[1].split(":")[1]
         Ex = split_label[2].split(":")[1]
+        
+        
         product = split_label[3].split(":")[1]
         value = row[1]
-        
-        product = product_codes[product]
-        
+                
         SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product),value,database)
          
         SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value,database)
@@ -263,16 +295,15 @@ def populate_values(year, country = None):
 
     
 def findInterestingTrends ():
+ 
+    print ("Getting Interesting Trends...")
         
-    interesting_trends = {}
-    
     product_trends = SQL_Handler.readAll("product_trends",database)
     
     for trend in product_trends:
+        
         product = trend[0].split("-")[0]
         trendline = trend[0].split("-")[1]
-
-        product = product_codes[product]
 
         if (trendline == "five_year_trend"):
             year = last_year - 5
@@ -291,7 +322,7 @@ def findInterestingTrends ():
 
         product_val = total/(last_year-year)+1                
         
-        trend_val   = trend[1]
+        trend_val = trend[1]
         
         
         if (abs(product_val*trend_val) > absolute_threshold):
@@ -317,7 +348,6 @@ def findInterestingTrends ():
         elif (trendline == "one_year_trend"):
             year = last_year - 1
         else:
-            print ("Horrible Failure")
             year = last_year
         
         total = 0    
@@ -325,14 +355,15 @@ def findInterestingTrends ():
             total += getProductCountry(product,country,y,tag)
         product_val = total/(last_year-year + 1) 
         trend_val   = trend[1]
+
         if (abs(product_val * trend_val) > absolute_threshold):
             label = "%s-%s|%s~%s$%s" % (product,trendline,country,tag,product_val)
             SQL_Handler.insert("interesting_trends",label,trend[1],database)
 
-    return interesting_trends
-# This will return the relevent files
+
 def findLikelyErrors():
 
+    print("Calculating Errors")
         
     interesting_trends = SQL_Handler.readAll("interesting_trends",database)
     
@@ -346,29 +377,26 @@ def findLikelyErrors():
         diff = last_year-first_year
         tag = getExport(bool)
         error_absolute = absolute_threshold * error_factor
-        for country in country_codes:
-            for product in product_codes:
-                
-                product = product_codes[product]
-                
+        for id,country in country_codes.items():
+            for hs,product in product_codes.items():
                 total = 0
                 market_val_total = 0
-                real = realCountry(country)
                 for year in range(first_year,last_year+1):               
-                    total += getProductCountry(product,real, year,tag)
+                    total += getProductCountry(product,country, year,tag)
                 if (total == 0):
                     continue
            
                 average = total/ diff
 
                 for year in range(first_year,last_year):
-                    value = getProductCountry(product,real, year,tag)
-                    trend_val = getTrend(product,real,bool) 
+                # This will not include 2014 as data there could be reasonable even though it seems erroneous
+                    value = getProductCountry(product,country, year,tag)
+                    trend_val = getTrend(product,country,bool) 
                     out_average = abs(average - value/diff)
                     if (out_average == 0):
                         out_average = .01
-                        #This means that jumps from averages of zero will equate to 100 times increases
-
+                        #This means that jumps from averages of zero will equate to 100 times the average increase
+                        
                     multiplier = (1 + (trend_val/diff) * (-diff/2 + (year - first_year)))
                     if (abs(value - multiplier * average)  > error_absolute and abs((value-out_average)/out_average) >= relative_threashold
                         or value == 0 and average > absolute_threshold * error_factor):
@@ -376,46 +404,12 @@ def findLikelyErrors():
                             market_val_total += getProduct(product, y)
                         market_val = market_val_total/ diff
                         if (value/market_val > market_threshold):    
-                            label = "%s-%s|%s~%s" % (product,real,year,tag)
-                            if (real == "DOM"):
-                                print (label)
-                                print (out_average)
-                                print (value)
-                                print (multiplier)
-                                print (average)
-                                print (abs(value - multiplier * average) )
+                            label = "%s-%s|%s~%s" % (product,country,year,tag)
                             output = (value-out_average)/out_average
-                            if (out_average == .01):
-                                output = 100000
                             
                             SQL_Handler.insert("errors",label,output,database)
 
 
-def getFiles(year,file_name):
-    global country_codes
-    global product_codes
-    print (year)
-    file_location = file_name + str(year) + '.csv'
-    with open(file_location) as csvfile:
-        import_reader = csv.reader(csvfile, delimiter=';')
-        for column in import_reader:
-        
-            row = column[0].split(",")
-            importer = row[3]
-            exporter = row[2]
-            
-            real_importer = realCountry(row[3])
-            
-            if (real_importer != False):
-                importer = real_importer
-                
-            real_exporter = realCountry(row[2])
-            if (real_exporter != False):
-                exporter = real_exporter
-
-
-            SQL_Handler.insert("Im_Ex_Data_%s"% (year),'Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],importer,exporter,row[1]),row[4],database)
-    end_thread()
 def getDatabase():
     return database
 def getExport(is_export):
@@ -437,6 +431,15 @@ def getProductTrend(label):
     except:
         return 0
 #    This will run through the collected data and return the Total Product for a given year        
+def getProductCode(product):
+    try:
+        return product_codes[str(int(product))]
+    except:
+        for i in product_codes:
+            if (i == int(product)):
+                print (i,product)
+                return product_codes[i]
+    print ()    
 def getProduct(product, year):
     try:
         value = SQL_Handler.read("product_values_%s" % (year),"%s,%s" % (year,product),database)[0][-1]
@@ -486,17 +489,7 @@ def isCountry(country):
             return True
     return False
 
-def realCountry(country):
-    try:
-        return country_codes[str(int(country))]
-    except:
-        try:
-            for real_country in country_codes:
-                if (real_country == str(int(country))):
-                    return country_codes[real_country]
-        except:
-            pass
-    return False
+
 def dataLookUp():
     type = raw_input("Product or Country")
 
@@ -523,6 +516,6 @@ if __name__ == '__main__':
         
     file_name = r'/home/chris/Downloads/baci92_'
 
-    run(file_name,True,True,True,True,True,False,False,False)
+    run(file_name,True,False,False,False,False,False,False,False)
     # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,aved,datalookup
     
