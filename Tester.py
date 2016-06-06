@@ -22,7 +22,8 @@ class Tester(unittest.TestCase):
     def setUp(self):  
         global database  
         print ("Beginnig Test")
-        Main.initilize(False,False,False,False,False,False,"Test_DB")
+        Main.setup();
+        Main.initilize(False,False,False,False,False,"Test_DB")
         database = Main.getDatabase()
      
     def test_find_errors(self):
