@@ -43,8 +43,9 @@ def insert(table_name, label, value,database):
     db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
     mysql_cur = db.cursor()
     try:
-        sql ="""INSERT INTO %s VALUES ('%s',%f)
-              ON DUPLICATE KEY UPDATE VALUE=VALUE+%f;""" % (table_name,label,float(value),float(value))
+#         sql ="""INSERT INTO %s VALUES ('%s',%f)
+#               ON DUPLICATE KEY UPDATE VALUE=VALUE+%f;""" % (table_name,label,float(value),float(value))
+        sql ="INSERT INTO %s VALUES ('%s',%f)" % (table_name,label,float(value))
     except:
         print (table_name,label,value)
         return False
@@ -68,6 +69,24 @@ def getTables(database):
     db.close()
 
 
+    return output
+def getOverSize(database,product,year):
+    db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
+        
+    mysql_cur = db.cursor()
+    search = []
+    search.append("'%")
+    search.append(product[:-2])
+    search.append("%'")
+        
+    value = "".join(search)
+#     print ("SELECT * FROM %s WHERE Label LIKE %s" % (table_name,value))
+    mysql_cur.execute( "SELECT * FROM %s WHERE Label LIKE %s" % ("product_values_%s" % (year),value))
+           
+    output = mysql_cur.fetchall()
+    
+    db.close()
+    
     return output
 def read(table_name,label,database):
 #         print ("SELECT * FROM %s WHERE LABEL = '%s'" % (table_name,label))

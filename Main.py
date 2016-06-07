@@ -12,16 +12,16 @@ import time
 import SQL_Handler
 import Trend_Handler
 
-absolute_threshold = 500
+absolute_threshold = 50000
 # This is the threshold for a market in a country to be meaningful in thousands
 
-relative_threashold = .5
+relative_threashold = 1
 # This is the threshold for a change to be considered relevent
 
 market_threshold = .25
 # This is the percent of the market that a trade must make up inorder to be considered relevent
 
-error_factor = 20
+error_factor = 10
 # This is the additional factor that turns a point from being interesting into being a possible error
 
 first_year = 2009
@@ -42,6 +42,8 @@ country_product_values = {}
 saved_trends = {}
 # This stores the information regarding trends in trade between two countries to increase efficency
 
+overmarket_factor = 10
+
 threads = []
 finished_threads = 0
 num_threads = 0 
@@ -50,28 +52,32 @@ num_threads = 0
 
 database = ""
 
-# This denotes the database that is being connected to as a global varible
+# This denotes the database that is being connected to as a global variable
 
     
-
-        
-# This will run the program
+# This serves to initialize the Im_Ex_Data. It should only be called once for a given period of time. This will essentially transfer all of the data from
+# csv files into mysql databases so that it can be processed more quickly. It is separated to ensure that it is not over-used or its data overwritten. 
 def setup ():
+    
     setup_initilize("OEC_DB")
 
     multi_thread(getFiles,first_year,last_year,arg=file_name)
-    
-def single_country_run (file_name,values,product_trends,trends,interesting_trends,errors,saved,datalookup,country):
+
+# This computes the relevant data for a single given country
+def single_country_run (file_name,values,product_trends,trends,interesting_trends,errors,final_errors,saved,datalookup,country,database):
     # These Inputs are booleans, with the exception of file_name which denotes the file from which to retrieve the data, of what parts of the code
     # Should be used. If a value is denoted false the associated table WILL BE DELETED to be replaced with new values. Saved, if True, will save all
     # Other values that are denoted as completed, e.g. are True. Datalookup will allow you to search collected data
     start = time.time()
 
     print("Initilizing...")
-    initilize(values,product_trends,trends,interesting_trends,errors,"OEC_DB")
-  
+    initilize(values,product_trends,trends,interesting_trends,errors,final_errors,database)
+
     if (not values):
-        multi_thread(single_country_populate_values,first_year,last_year,num=1,arg=country)
+        single_thread(populate_values,first_year,last_year,arg=country)
+
+        multi_thread(single_country_over_values,first_year,last_year)
+
         print ("Finished Calculating")
     if (not product_trends):
         Trend_Handler.find_product_trends(database,product_codes)
@@ -82,13 +88,17 @@ def single_country_run (file_name,values,product_trends,trends,interesting_trend
         findInterestingTrends()
     if (not errors):
         findLikelyErrors()
+    if (not final_errors):
+        filter_errors()
     if (not saved):
         save_tables(values,product_trends,trends,interesting_trends,errors)
     if (datalookup):
         dataLookUp()
+    
     end = time.time()
     print(end - start)
-    
+
+# This method will increment through all countries and acquire their export data only and saving a compiled list of interesting_trends and errors
 def all_country_run(file_name,database_name):
     # These Inputs are booleans, with the exception of file_name which denotes the file from which to retrieve the data, of what parts of the code
     # Should be used. If a value is denoted false the associated table WILL BE DELETED to be replaced with new values. Saved, if True, will save all
@@ -96,14 +106,15 @@ def all_country_run(file_name,database_name):
     start = time.time()
 
     print("Initilizing...")
-    initilize(False,False,False,False,False,database_name)
+    initilize(False,False,False,False,False,False,database_name)
     for id,country in country_codes:
         print (country)
-        multi_thread(multiple_country_populate_values,first_year,last_year,num=1,arg=country)
+        single_thread(multiple_country_populate_values,first_year,last_year,arg=country)
+        multi_thread(single_country_over_values,first_year,last_year)
         Trend_Handler.find_product_trends(database,product_codes)
         Trend_Handler.find_trends(country_codes,product_codes,True)
-        findInterestingTrends()
-        findLikelyErrors()
+        findInterestingTrends(country)
+        findLikelyErrors(country)
         reset(database_name)
     save_tables(False,False,False,True,True)
 
@@ -111,10 +122,12 @@ def all_country_run(file_name,database_name):
     
     end = time.time()
     print(end - start)
-def multi_thread(function,min_val,max_val,num=None, arg=None):
+def multi_thread(function,min_val,max_val,num=None, arg=None, wait=60):
     global num_threads
     global finished_threads
     global threads
+    global done 
+    
     finished_threads = 0 
     num_threads = 0 
     if (num == None):
@@ -139,8 +152,8 @@ def multi_thread(function,min_val,max_val,num=None, arg=None):
 
     while ( num_threads > finished_threads):
         print ('Still open %s' % (num_threads - finished_threads))
-        time.sleep(60)
-        
+        time.sleep(wait)
+    
 def single_thread(function,min_val,max_val, arg="None"):
     finished_threads = 0 
     num_threads = 0 
@@ -152,14 +165,14 @@ def setup_initilize (database_name = "OEC_DB" ):
     
     initilize(False,False,False,False,False,False,database_name)
     
-def initilize(values,product_trends,trends,interesting_trends,errors,database_name="OEC_DB"):
+def initilize(values,product_trends,trends,interesting_trends,errors,final_errors,database_name="OEC_DB"):
     global country_codes
     global product_codes
     global database
     
     database = database_name
                        
-    make_tables(values,product_trends,trends,interesting_trends,errors)
+    make_tables(values,product_trends,trends,interesting_trends,errors,final_errors)
 
     country_codes = {}
     product_codes = {}
@@ -190,7 +203,7 @@ def initilize(values,product_trends,trends,interesting_trends,errors,database_na
     fill_country_values(database_name)
 def reset(database_name="OEC_DB"):
     
-    initilize(False,False,False,True,True,database_name)
+    initilize(False,False,False,True,True,True,database_name)
 
 def fill_country_values(database_name):
     global database 
@@ -204,7 +217,7 @@ def fill_country_values(database_name):
         trend = SQL_Handler.readAll("trends",database)
         for value in trend:
             saved_trends[value[0]] = value[-1]            
-def make_tables(values,product_trends,trends,interesting_trends,errors):    
+def make_tables(values,product_trends,trends,interesting_trends,errors,final_errors):    
     if(not values):
         single_thread(SQL_Handler.make_table, first_year, last_year, ("product_values",database))
         single_thread(SQL_Handler.make_table, first_year, last_year, ("country_values",database))
@@ -217,6 +230,9 @@ def make_tables(values,product_trends,trends,interesting_trends,errors):
         SQL_Handler.make_table(None,("interesting_trends",database))
     if (not errors):
         SQL_Handler.make_table(None,("errors",database))
+    if (not final_errors):
+        SQL_Handler.make_table(None,("final_errors",database))
+
         
 def save_tables(values,product_trends,trends,interesting_trends,errors):    
     if(values):
@@ -257,7 +273,7 @@ def save(year,table_name):
                 datawriter.writerow(row)
 
 def getFiles(year,arg):
-    (file_name,country) = arg
+    file_name = arg
     print (year)
     file_location = file_name + str(year) + '.csv'
     with open(file_location) as csvfile:
@@ -274,19 +290,8 @@ def getFiles(year,arg):
             except:    
                 print ('Year:%s,Importer:%s,Exporter:%s,Product:%s' % (row[0],row[3],row[2],row[1]))
     end_thread()
-def populate_value(year,Im,Ex,product,value):
     
-    SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product),value,database)
-         
-    SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value,database)
-     
-    SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value,database)
-     
-    SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value,database)
-    
-    SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value,database)
-    
-def single_country_populate_values(year, country = None):
+def populate_values(year, country = None):
     
     print("Populating Tables...")
     
@@ -320,6 +325,7 @@ def single_country_populate_values(year, country = None):
         SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value,database)
  
         SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value,database)
+        
          
     end_thread()
 
@@ -342,10 +348,21 @@ def multiple_country_populate_values(year, country):
         SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value,database)
          
     end_thread()
+def single_country_over_values(year, arg = None):
+    print("Calculating Overhead")
+    for hs,product in product_codes.items():
+        if (len(product) > 6):
+            total = 0
+            products = SQL_Handler.getOverSize(database,product,year)
+            for p in products:
+                total += p[1]
+            SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product[:-2]),total,database)
+    end_thread()
 
 # This method combs through the data to see if it can find interesting long-term trends, i.e. The oil market contracting severely in size.
 # Some of these trends may be so severe that they indicate a possible error in the data    
-def findInterestingTrends ():
+# Its argument note allows an appendment to the label to allow further clarification as to its meaning
+def findInterestingTrends (note = None):
  
     print ("Getting Interesting Trends...")
         
@@ -357,31 +374,24 @@ def findInterestingTrends ():
         product = trend[0].split("-")[0]
         trendline = trend[0].split("-")[1]
 
-        if (trendline == "five_year_trend"):
-            year = last_year - 5
-        elif (trendline == "long_trend"):
-            year = first_year
-        elif (trendline == "three_year_trend"):
-            year = last_year - 3
-        elif (trendline == "one_year_trend"):
-            year = last_year - 1
-        else:
-            year = last_year
+        year = getTrendYear(trendline)
 
-        total = 0    
-        for y in range (year,last_year+1):
-            total += getProduct(product,year)
+        start = getProduct(product, year)
+        
+        end = getProduct(product, last_year)
 
-        # Calculate the total value of the market over the period of time then find its  average over that period of time 
-        product_val = total/(last_year-year)+1                
+        net = end -start
         
         trend_val = trend[1]
         
         # If the value of the trend (i.e. -.5 or a 50% decrease) times the size of the market (i.e. $1 billion dollars) is greater than the 
         # absolute threshold then insert the value into interesting trends
         
-        if (abs(product_val*trend_val) > absolute_threshold):
-            label = "%s$%s" % (trend[0],product_val)
+        if (abs(net) > absolute_threshold):
+            if (note == None):
+                label = "%s$%s" % (trend[0],net)
+            else:
+                label = "%s$%s@%s" % (trend[0],net,note)
 
             SQL_Handler.insert("interesting_trends",label,trend[1],database)
     
@@ -395,35 +405,34 @@ def findInterestingTrends ():
         country = trend[0].split("|")[1].split("~")[0]
         
         tag = trend[0].split("|")[1].split("~")[1]
-        if (trendline == "five_year_trend"):
-            year = last_year - 5
-        elif (trendline == "long_trend"):
-            year = first_year
-        elif (trendline == "three_year_trend"):
-            year = last_year - 3
-        elif (trendline == "one_year_trend"):
-            year = last_year - 1
-        else:
-            year = last_year
+     
+        getTrendYear(trendline)
+                   
+        start = getProductCountry(product,country,year,tag)
         
-        total = 0    
-        for y in range (year,last_year+1):
-            total += getProductCountry(product,country,y,tag)
+        end = getProductCountry(product,country,last_year,tag)
 
-        # Calculate the total value of the market over the period of time then find its  average over that period of time 
-        product_val = total/(last_year-year + 1) 
-        
+        net = end -start
+                
         trend_val   = trend[1]
 
         # If the value of the trend (i.e. -.5 or a 50% decrease) times the size of the market (i.e. $1 billion dollars) is greater than the 
         # absolute threshold then insert the value into interesting trends
         
-        if (abs(product_val * trend_val) > absolute_threshold):
-            label = "%s-%s|%s~%s$%s" % (product,trendline,country,tag,product_val)
+        if (abs(net * trend_val) > absolute_threshold):
+            
+            if (note == None):
+                label = "%s-%s|%s~%s$%s" % (product,trendline,country,tag,net)
+            else:
+                label = "%s-%s|%s~%s$%s@%s" % (product,trendline,country,tag,net,note)
+
             SQL_Handler.insert("interesting_trends",label,trend[1],database)
 
 # This program will search through both the trends and the individual values of trades between two countries to ensure to detect possible errors
-def findLikelyErrors():
+# Its argument note allows an appendment to the label to allow further clarification as to its meaning
+def findLikelyErrors(note=None):
+    market_val_total = 0
+    diff = last_year-first_year
 
     print("Calculating Errors")
         
@@ -431,26 +440,69 @@ def findLikelyErrors():
     # Acquires the interesting_trends
      
     for trend in interesting_trends:
-        product_val = float(trend[0].split("$")[-1])
+        product = trend[0].split("-")[0]
+        net = float(trend[0].split("$")[-1])
+        trendline = trend[0].split("-")[1].split("|")[0].split("$")[0]
+
         # Retrieves the product value that is appended to the trend
         trend_val = trend[-1]
+
+        year = getTrendYear(trendline)
+        
         
         # If the value of the trend (i.e. -.5 or a 50% decrease) times the size of the market (i.e. $1 billion dollars) is greater than the 
         # absolute threshold times the error threshold and the shift is at the relative threshold shift over the given period then insert the value into errors        
         
-        if (abs(product_val * trend_val) > absolute_threshold * error_factor and abs(trend_val) >= relative_threashold):
-                SQL_Handler.insert("errors",trend[0],trend_val,database)
+        if (abs(net) > absolute_threshold * error_factor * (last_year - year) and abs(trend_val) >= relative_threashold):
+            
+            # Computes the total market size for a given product
+            
+
+
+            # Calculate the total value of the market over the period of time then find its  average over that period of time 
+            for y in range(year,last_year+1):               
+                market_val_total += getProduct(product, y)
+                        
+            market_val = market_val_total/ (last_year - year + 1)
+            
+            # Ensures that this trend is a significant change in the market (i.e. a country with a small percentage of trade might grow 200% over the
+            # The course of 5 years but that is likely not an erroneous trend 
+            if (net/market_val > market_threshold):
+                label = trend[0]
+                if (note != None and not trend[0].contains('@')):
+                    label = trend[0].append('@%s' % (note))
+              
+                product_total = 0
+                for y in range(first_year,last_year+1):               
+                    product_total += getProduct(product[:-2], y)
+                
+                if (product_total != 0):
+                                
+                    product_val     = getProduct(product[:-2], year)
+                    product_average = (product_total-product_val)/ (diff)
+                    product_percent_change = (product_val - product_average) / product_average
+    
+                    if (abs(product_percent_change) * overmarket_factor > abs(trend_val)): 
+                        SQL_Handler.insert("errors",trend[0],trend_val,database)
+                    
+                
     print ("Finished Trends")
     for bool in [True,False]:
     # Runs through both True, and False
-        diff = last_year-first_year
         tag = getExport(bool)
-        error_absolute = absolute_threshold * error_factor
+        labels = []
         for id,country in country_codes.items():
             for hs,product in product_codes.items():
-                total = 0
+                
                 market_val_total = 0
+
+                total = 0
+                
+                # First year value is used later to account for a any trends across multiple years that might explain some shift (i.e. if a country's
+                # trade is growing 200% over the course of 5 years then a single year growth of 75% is within a reasonable range while if a country's 
+                # trade is shrinking 200% over the course of 5 years then a single year growth of 50% is likely erroneous
                 first_year_value = getProductCountry(product,country, first_year,tag)
+                
                 for year in range(first_year+1,last_year+1):               
                     total += getProductCountry(product,country, year,tag)
                 total += first_year_value
@@ -467,7 +519,7 @@ def findLikelyErrors():
                     # out_average represents the average of the given range removing the value that is being examined from the average
                     # For example imagine a range of [1,1,1000,1,1] the average would be 200.8 where as the out_average would be 1
                     
-                    out_average = abs(average - value/(diff+1)) * ((diff + 1)/diff)
+                    out_average = abs((total - value)/(diff))
                     
                     # If there are no other data points in the range then set the out_average to be .01. This will result in EXTREMELY
                     # high ranges that will make these errors stand out
@@ -489,23 +541,58 @@ def findLikelyErrors():
                     # times the error_factor and the shift is greater or equal to the relative_threshold times the error_factor
                     # or the value is 0 and the average for the period is greater than the absolute_threshold times error_factor
                     
-                    if (abs(value - out_average  - first_year_value * multiplier)  > absolute_threshold * error_factor and abs(percent_change) >= relative_threashold * error_factor
+                    
+                    
+                    if (abs(value - out_average  - first_year_value * multiplier)  > absolute_threshold and abs(percent_change) >= relative_threashold * error_factor
                         or value == 0 and average > absolute_threshold * error_factor):
-                        for y in range(first_year,last_year+1):               
-                            market_val_total += getProduct(product, y)
-                        
-                        market_val = market_val_total/ (diff+1)
                         
                         # This calculates the total size of the market so that the relative size of this value to the size of the market can be determined
-                        
-                        # If the value of the market is a sufficent part of the market (i.e. a very significant spike) or the average is a significant 
-                        #protion of the market (i.e. a meaningful change with a major trade partner)
-                        
-                        if (value/market_val > market_threshold or average/market_val > market_threshold):    
-                            label = "%s-%s|%s~%s" % (product,country,year,tag)
-                            output = (value-out_average)/out_average
                             
-                            SQL_Handler.insert("errors",label,output,database)
+                        market_val = getProduct(product, year)
+                        
+                        
+                        # If the value of the market is a sufficient part of the market (i.e. a very significant spike) or the average is a significant 
+                        # portion of the market (i.e. a meaningful change with a major trade partner)
+                        
+                        if (market_val != 0 and (value/market_val > market_threshold or average/market_val > market_threshold)):    
+                            label = "%s-%s|%s~%s" % (product,country,year,tag)
+                            if(note != None):
+                                label = "%s-%s|%s~%s@%s" % (product,country,year,tag,note)
+                            product_total = 0
+                            for y in range(first_year,last_year+1):               
+                                product_total += getProduct(product[:-2], y)
+                                
+                            product_val     = getProduct(product[:-2], year)
+                            product_average = (product_total-product_val)/ (diff)
+                            product_percent_change = (product_val - product_average) / product_average
+
+                            if (product == "5271121" and country == "eudeu"):
+                                print(year)
+                                print(out_average)
+                                print(value)
+                                print(value - out_average - first_year_value * multiplier,absolute_threshold)
+                                print(percent_change,relative_threashold*error_factor)
+                                print(abs(product_percent_change) * overmarket_factor,percent_change)
+
+                            if (abs(product_percent_change) * overmarket_factor > abs(percent_change)): 
+                                output = (value-out_average)/out_average
+                                labels.append(label)
+                                for i in labels:
+                                    if (i == label): 
+                                        continue
+                                SQL_Handler.insert("errors",label,output,database)
+def filter_errors():
+    errors = SQL_Handler.readAll("errors", database)
+    
+    added_errors = {}
+    
+    for error in errors:
+        label = error[0].split("|")[0].split("-")[0] + "~" + error[0].split("|")[1].split("~")[1].split("$")[0]
+        try:
+            added_errors[label]
+        except:
+            SQL_Handler.insert("final_errors",label,0,database)
+            added_errors[label] = error[1]
 
 def getDatabase():
     return database
@@ -515,7 +602,19 @@ def getExport(is_export):
     if (is_export):
         tag = "Export"
     return tag  
-
+def getTrendYear(trendline):
+    if (trendline == "five_year_trend"):
+        return last_year - 5
+    elif (trendline == "long_trend"):
+        return first_year
+    elif (trendline == "three_year_trend"):
+        return last_year - 3
+    elif (trendline == "one_year_trend"):
+        return last_year - 1
+    else:
+        print ("Trend Year Failure")
+        print (trendline)
+        return last_year
 def getLongTrend(product,country,tag):
     try:
         output = saved_trends["%s-%s|%s~%s" % (product,"long_trend",country,tag)]
@@ -579,7 +678,6 @@ def dataLookUp():
 if __name__ == '__main__':
         
     file_name = r'/home/chris/Downloads/baci92_'
-
-    single_country_run(file_name, True, False, False, False, False, True, False,"OEC_DB")
-    # Inputs = calculated_Im_Ex,calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,saved,datalookup
+    single_country_run(file_name, True, True, True, True, False,False, False, False,"eunld","OEC_DB")
+    # Inputs = calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,saved,datalookup
     
