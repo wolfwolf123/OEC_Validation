@@ -64,7 +64,7 @@ def setup ():
     multi_thread(getFiles,first_year,last_year,arg=file_name)
 
 # This computes the relevant data for a single given country
-def single_country_run (file_name,values,product_trends,trends,interesting_trends,errors,final_errors,saved,datalookup,country,database):
+def single_country_run (file_name,values,product_trends,trends,interesting_trends,errors,final_errors,save,datalookup,country,database):
     # These Inputs are booleans, with the exception of file_name which denotes the file from which to retrieve the data, of what parts of the code
     # Should be used. If a value is denoted false the associated table WILL BE DELETED to be replaced with new values. Saved, if True, will save all
     # Other values that are denoted as completed, e.g. are True. Datalookup will allow you to search collected data
@@ -90,8 +90,8 @@ def single_country_run (file_name,values,product_trends,trends,interesting_trend
         findLikelyErrors()
     if (not final_errors):
         filter_errors()
-    if (not saved):
-        save_tables(values,product_trends,trends,interesting_trends,errors)
+    if (save):
+        save_tables(values,product_trends,trends,interesting_trends,errors,final_errors)
     if (datalookup):
         dataLookUp()
     
@@ -116,7 +116,7 @@ def all_country_run(file_name,database_name):
         findInterestingTrends(country)
         findLikelyErrors(country)
         reset(database_name)
-    save_tables(False,False,False,True,True)
+    save_tables(False,False,False,True,True,True)
 
 
     
@@ -234,7 +234,7 @@ def make_tables(values,product_trends,trends,interesting_trends,errors,final_err
         SQL_Handler.make_table(None,("final_errors",database))
 
         
-def save_tables(values,product_trends,trends,interesting_trends,errors):    
+def save_tables(values,product_trends,trends,interesting_trends,errors,final_errors):    
     if(values):
         single_thread(save, first_year, last_year, "product_values")
         single_thread(save, first_year, last_year, "country_values")
@@ -250,7 +250,8 @@ def save_tables(values,product_trends,trends,interesting_trends,errors):
         save(None,"interesting_trends")
     if (errors):
         save(None,"errors")
-
+    if (final_errors):
+        save(None,"final_errors")
 
 def end_thread():
 
@@ -678,6 +679,6 @@ def dataLookUp():
 if __name__ == '__main__':
         
     file_name = r'/home/chris/Downloads/baci92_'
-    single_country_run(file_name, True, True, True, True, False,False, False, False,"eunld","OEC_DB")
-    # Inputs = calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,saved,datalookup
+    single_country_run(file_name, True, True, True, True, True,True, True, False,"eunld","OEC_DB")
+    # Inputs = calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,save,datalookup
     
