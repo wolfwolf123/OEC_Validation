@@ -15,7 +15,7 @@ def find_product_trends(database,product_codes):
     
     print("Getting Product Trends...")
     
-    Main.fill_country_values(database)
+    Main.fill_values(database)
 
 
     for hs,product in product_codes.items():

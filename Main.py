@@ -14,10 +14,13 @@ import Trend_Handler
 import matplotlib.pyplot as plt
 
 local_shift_threshold = 1.5
+# This accounts the relative size of the values to the left and right of this value
 
 zero_threshold = 3
+# This is the number of zeros in a single product,country,year trend before a zero becomes an expected value
 
 too_large_market = 10
+# This is the point at which the over market is no longer considered due to its relative size (Only used in ploting)
 
 volatility_factor = 3
 # This is the number of trends found in a single market for it considered "Volatile" and to ignore the errors in that market 
@@ -53,11 +56,13 @@ saved_trends = {}
 # This stores the information regarding trends in trade between two countries to increase efficiency
 
 product_values = {}
+# This stores the information regarding the trade of a product to increase efficiency
 
 saved_product_trends = {}
+# This stores the information regarding product trends in trade between two countries to increase efficiency
 
-overmarket_factor = 10
-
+overmarket_factor = 2
+# This is the tolerance amount that the scale (over market size/ product market size) is multiplied by to to account for other products in the market  
 threads = []
 finished_threads = 0
 num_threads = 0 
@@ -158,7 +163,7 @@ def multi_thread(function,min_val,max_val,num=None, arg=None, wait=60):
     num_threads = 0 
     if (num == None):
         for val in range(min_val,max_val+1):
-            t = threading.Thread(target=function, args=(val,arg))
+            t = threading.Thread(target=function, args=(val,arg,True))
             threads.append(t)
             t.start()
             num_threads += 1
@@ -246,7 +251,7 @@ def reset(database_name="OEC_DB"):
 
 # This program transfers the country_values from the mySQL server into a dictionary
 # to allow for instant access 
-def fill_values(database_name,type):
+def fill_values(database_name,type = "mySQL"):
     global database 
     
     database = database_name
@@ -259,7 +264,6 @@ def fill_values(database_name,type):
         for year in range (first_year,last_year+1):
             product_values_year = SQL_Handler.readAll("product_values_%s" % (year),database)
             for value in product_values_year:
-                print (value[0],value[-1])
                 product_values[value[0]] = value[-1]
                 
         trend = SQL_Handler.readAll("trends",database)
@@ -271,28 +275,32 @@ def fill_values(database_name,type):
             saved_product_trends[value[0]] = value[-1]
     
     if (type == "csv"):
+        for year in range (first_year,last_year+1):
 
-        country_file = file_location + "country_product_values.csv"
-
-        try:
-            with open(country_file) as csvfile:
-                import_reader = csv.reader(csvfile, delimiter=';')
-                for column in import_reader:
-                    row = column[0].split(",")
-                    country_product_values[row[0]] = row[1]
-        except:
-            print (country_file + " not found")
-        product_file = file_location + "product_values.csv"
+            country_file = file_location + "country_product_values_%s.csv" % year
+    
+            try:
+                with open(country_file) as csvfile:
+                    import_reader = csv.reader(csvfile, delimiter=';')
+                    for column in import_reader:
+                        row = column[0].split(",")
+                        country_product_values[row[0]] = float(row[1])
+            except:
+                print (country_file + " not found")
         
-        try:
-            with open(product_file) as csvfile:
-                import_reader = csv.reader(csvfile, delimiter=';')
-                for column in import_reader:
-                    row = column[0].split(",")
-                    product_values[row[0]] = row[1]
-        except:
-            print (product_file + " not found")
-                
+        for year in range (first_year,last_year+1):
+        
+            product_file = file_location + "product_values_%s.csv" % year
+            
+            try:
+                with open(product_file) as csvfile:
+                    import_reader = csv.reader(csvfile, delimiter=';')
+                    for column in import_reader:
+                        row = column[0].split(",")
+                        product_values[row[0]] = float(row[1])
+            except:
+                print (product_file + " not found")
+                    
         trend_file = file_location + "trends.csv"
         
         try:
@@ -368,11 +376,11 @@ def save(year,table_name,arg=None):
                 datawriter.writerow(row)
     else:
         data = SQL_Handler.readAll("%s_%s" % (table_name,year),database)
-        with open(file_location + table_name + ".csv", 'w') as mycsvfile:
+        with open(file_location +  "%s_%s" % (table_name,year) + ".csv", 'w') as mycsvfile:
             datawriter = csv.writer(mycsvfile)
             for row in data:
                 datawriter.writerow(row)
-        with open(table_name + ".csv", 'w') as mycsvfile:
+        with open("%s_%s" % (table_name,year) + ".csv", 'w') as mycsvfile:
             datawriter = csv.writer(mycsvfile)
             for row in data:
                 datawriter.writerow(row)
@@ -585,12 +593,12 @@ def findLikelyErrors(note=None):
                     product_total += getProduct(product[:-2], y)
                 
                 if (product_total != 0):
-                                
-                    product_val     = getProduct(product[:-2], year)
-                    product_average = (product_total-product_val)/ (diff)
-                    product_percent_change = (product_val - product_average) / product_average
+     
+                    product_net      = getProduct(product[:-2], last_year) - getProduct(product[:-2], year)
+                    overmarket_scale = (product_net/market_val)
     
-                    if (abs(product_percent_change) * overmarket_factor > abs(trend_val)): 
+                    if (overmarket_scale > too_large_market or abs(product_net) * overmarket_scale * overmarket_factor> abs(net) and 
+                        product_net > 0 and net > 0 or product_net < 0 and net < 0): 
                         SQL_Handler.insert("errors",trend[0],trend_val,database)
                     
                 
@@ -682,7 +690,6 @@ def findLikelyErrors(note=None):
                                 print(value)
                                 print(value - out_average - first_year_value * multiplier,absolute_threshold)
                                 print(percent_change,relative_threashold*error_factor)
-                                print(abs(product_percent_change) * overmarket_factor,percent_change)
                                 print(value/market_val)
                                 print(market_val)
                                 print(average)
@@ -704,10 +711,12 @@ def findLikelyErrors(note=None):
                                 product_val     = getProduct(product[:-2], year)
                                 product_average = (product_total-product_val)/ (diff)
                                 product_percent_change = (product_val - product_average) / product_average
-    
+                                overmarket_scale = product_val/market_val
+
                             
     
-                                if (product_val > value * too_large_market or abs(product_percent_change) * overmarket_factor > abs(percent_change) and product_val < value * too_large_market ): 
+                                if (overmarket_scale > too_large_market or abs(product_percent_change) * overmarket_scale * overmarket_factor > abs(percent_change) and 
+                                    (product_percent_change > 0 and percent_change > 0 or product_percent_change < 0 and percent_change < 0)): 
                                     output = (value-out_average)/out_average
                                     labels.append(label)
                                     for i in labels:
@@ -783,23 +792,27 @@ def getProductCode(product):
 
 def getProduct(product, year):
     try:
-        value = product_values["%s,%s" % (year,product)]
+        value = product_values["%s-%s" % (year,product)]
+        print (value,"%s-%s" % (year,product))
 #             print ("Value",value)
 #         print(product)
 #         print(value)
         return value
     except:
-        print ("%s,%s" % (year,product))
-        for i in product_values:
-            print(i)
+#         print ("%s,%s" % (year,product))
+#         for i in product_values:
+#             print(i)
         return 0;
 
 #    This will run through the collected data and return the Total Product for a given year and country
 def getProductCountry(product,country,year,tag):
     try:
-        return country_product_values["%s,%s,%s~%s" % (year,country,product,tag)]
+        print (country_product_values["%s-%s-%s~%s" % (year,country,product,tag)],"%s-%s-%s~%s" % (year,country,product,tag))
+
+        return country_product_values["%s-%s-%s~%s" % (year,country,product,tag)]
+
     except:
-        print ("%s,%s,%s~%s" % (year,country,product,tag))
+#         print ("%s,%s,%s~%s" % (year,country,product,tag))
 #         for i in country_product_values:
 #             print(i)
         return 0
@@ -882,7 +895,7 @@ def plot(inputs):
                 else:
                     point_overmarket.append(getProduct(product[:-2],year)* 1000)
 
-                
+        print (points) 
         plt.plot(x,points)
         plt.plot(x,point_market)
         plt.plot(x,point_overmarket)
@@ -927,6 +940,6 @@ def plot(inputs):
 if __name__ == '__main__':
         
     file_name = file_location + 'baci92_'
-    single_country_run(file_name, False, False, False, False, False, False, False, False,False,"eunld","OEC_DB","mySQL")
+    single_country_run(file_name, True, True, True, True, True, True, False, False,True,"eunld","OEC_DB","csv")
     # Inputs = calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,final_errors,save,datalookup,plotter
     
