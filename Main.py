@@ -62,6 +62,8 @@ threads = []
 finished_threads = 0
 num_threads = 0 
 
+file_location = r'/home/chris/Downloads/'
+
 # These allow for multi-threading
 
 database = ""
@@ -78,14 +80,14 @@ def setup ():
     multi_thread(getFiles,first_year,last_year,arg=file_name)
 
 # This computes the relevant data for a single given country
-def single_country_run (file_name,values,product_trends,trends,interesting_trends,errors,final_errors,save,datalookup,plot,country,database):
+def single_country_run (file_name,values,product_trends,trends,interesting_trends,errors,final_errors,save,datalookup,plot,country,database,type):
     # These Inputs are booleans, with the exception of file_name which denotes the file from which to retrieve the data, of what parts of the code
     # Should be used. If a value is denoted false the associated table WILL BE DELETED to be replaced with new values. Saved, if True, will save all
     # Other values that are denoted as completed, e.g. are True. Datalookup will allow you to search collected data
     start = time.time()
 
     print("Initilizing...")
-    initilize(values,product_trends,trends,interesting_trends,errors,final_errors,database)
+    initilize(values,product_trends,trends,interesting_trends,errors,final_errors,database,type)
 
     if (not values):
         single_thread(populate_values,first_year,last_year,arg=country)
@@ -210,8 +212,8 @@ def initilize(values,product_trends,trends,interesting_trends,errors,final_error
 
     country_codes = {}
     product_codes = {}
-    country_file = r'/home/chris/Downloads/country_codes.csv'
-    product_file = r'/home/chris/Downloads/product_codes.csv'
+    country_file = file_location + 'country_codes.csv'
+    product_file = file_location + 'product_codes.csv'
 
     with open(country_file) as csvfile:
         import_reader = csv.reader(csvfile, delimiter=';')
@@ -257,6 +259,7 @@ def fill_values(database_name,type):
         for year in range (first_year,last_year+1):
             product_values_year = SQL_Handler.readAll("product_values_%s" % (year),database)
             for value in product_values_year:
+                print (value[0],value[-1])
                 product_values[value[0]] = value[-1]
                 
         trend = SQL_Handler.readAll("trends",database)
@@ -264,9 +267,53 @@ def fill_values(database_name,type):
             saved_trends[value[0]] = value[-1]
             
         product_trends = SQL_Handler.readAll("product_trends",database)
-        for value in trend:
+        for value in product_trends:
             saved_product_trends[value[0]] = value[-1]
+    
+    if (type == "csv"):
 
+        country_file = file_location + "country_product_values.csv"
+
+        try:
+            with open(country_file) as csvfile:
+                import_reader = csv.reader(csvfile, delimiter=';')
+                for column in import_reader:
+                    row = column[0].split(",")
+                    country_product_values[row[0]] = row[1]
+        except:
+            print (country_file + " not found")
+        product_file = file_location + "product_values.csv"
+        
+        try:
+            with open(product_file) as csvfile:
+                import_reader = csv.reader(csvfile, delimiter=';')
+                for column in import_reader:
+                    row = column[0].split(",")
+                    product_values[row[0]] = row[1]
+        except:
+            print (product_file + " not found")
+                
+        trend_file = file_location + "trends.csv"
+        
+        try:
+            with open(trend_file) as csvfile:
+                import_reader = csv.reader(csvfile, delimiter=';')
+                for column in import_reader:
+                    row = column[0].split(",")
+                    saved_trends[row[0]] = row[1]
+        except:
+            print ( trend_file + " not found")
+            
+        product_trends_file = file_location + "product_trends.csv"
+        
+        try:
+            with open(product_trends_file) as csvfile:
+                import_reader = csv.reader(csvfile, delimiter=';')
+                for column in import_reader:
+                    row = column[0].split(",")
+                    saved_product_trends[row[0]] = row[1]
+        except:
+            print (product_trends_file)
 # This program will take a series of booleans and for each False it will DELETE that 
 # table and remake it            
 def make_tables(values,product_trends,trends,interesting_trends,errors,final_errors):    
@@ -311,12 +358,20 @@ def end_thread():
 def save(year,table_name,arg=None):
     if (year == None):
         data = SQL_Handler.readAll(table_name,database)
+        with open(file_location + table_name + ".csv", 'w') as mycsvfile:
+            datawriter = csv.writer(mycsvfile)
+            for row in data:
+                datawriter.writerow(row)
         with open(table_name + ".csv", 'w') as mycsvfile:
             datawriter = csv.writer(mycsvfile)
             for row in data:
                 datawriter.writerow(row)
     else:
         data = SQL_Handler.readAll("%s_%s" % (table_name,year),database)
+        with open(file_location + table_name + ".csv", 'w') as mycsvfile:
+            datawriter = csv.writer(mycsvfile)
+            for row in data:
+                datawriter.writerow(row)
         with open(table_name + ".csv", 'w') as mycsvfile:
             datawriter = csv.writer(mycsvfile)
             for row in data:
@@ -367,15 +422,15 @@ def populate_values(year, country = None,multi=False):
         product = split_label[3].split(":")[1]
         value = row[1]
                 
-        SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product),value,database)
+        SQL_Handler.insert("product_values_%s" % (year),"%s-%s" % (year,product),value,database)
          
-        SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" %(year,Im,"Import"),value,database)
+        SQL_Handler.insert("country_values_%s" %(year),"%s-%s~%s" %(year,Im,"Import"),value,database)
          
-        SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value,database)
+        SQL_Handler.insert("country_values_%s" %(year),"%s-%s~%s" % (year,Ex,"Export"),value,database)
          
-        SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Im,product,"Import"),value,database)
+        SQL_Handler.insert("country_product_values_%s" %(year),"%s-%s-%s~%s" % (year,Im,product,"Import"),value,database)
  
-        SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value,database)
+        SQL_Handler.insert("country_product_values_%s" %(year),"%s-%s-%s~%s" % (year,Ex,product,"Export"),value,database)
         
     if (multi):
         end_thread()
@@ -392,11 +447,11 @@ def multiple_country_populate_values(year, country,multi=False):
         product= split_label[3].split(":")[1]
         value = row[1]
                 
-        SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product),value,database)
+        SQL_Handler.insert("product_values_%s" % (year),"%s-%s" % (year,product),value,database)
                   
-        SQL_Handler.insert("country_values_%s" %(year),"%s,%s~%s" % (year,Ex,"Export"),value,database)
+        SQL_Handler.insert("country_values_%s" %(year),"%s-%s~%s" % (year,Ex,"Export"),value,database)
           
-        SQL_Handler.insert("country_product_values_%s" %(year),"%s,%s,%s~%s" % (year,Ex,product,"Export"),value,database)
+        SQL_Handler.insert("country_product_values_%s" %(year),"%s-%s-%s~%s" % (year,Ex,product,"Export"),value,database)
          
     if (multi):
         end_thread()
@@ -408,7 +463,7 @@ def single_country_over_values(year, arg = None,multi=False):
             products = SQL_Handler.getOverSize(database,product,year)
             for p in products:
                 total += p[1]
-            SQL_Handler.insert("product_values_%s" % (year),"%s,%s" % (year,product[:-2]),total,database)
+            SQL_Handler.insert("product_values_%s" % (year),"%s-%s" % (year,product[:-2]),total,database)
     if (multi):
         end_thread()
 
@@ -734,7 +789,9 @@ def getProduct(product, year):
 #         print(value)
         return value
     except:
-#         print ("%s,%s" % (year,product))
+        print ("%s,%s" % (year,product))
+        for i in product_values:
+            print(i)
         return 0;
 
 #    This will run through the collected data and return the Total Product for a given year and country
@@ -742,7 +799,7 @@ def getProductCountry(product,country,year,tag):
     try:
         return country_product_values["%s,%s,%s~%s" % (year,country,product,tag)]
     except:
-#         print ("%s,%s,%s~%s" % (year,country,product,tag))
+        print ("%s,%s,%s~%s" % (year,country,product,tag))
 #         for i in country_product_values:
 #             print(i)
         return 0
@@ -869,7 +926,7 @@ def plot(inputs):
     
 if __name__ == '__main__':
         
-    file_name = r'/home/chris/Downloads/baci92_'
-    single_country_run(file_name, True, True, True, True, False, False, False, False,True,"eunld","OEC_DB")
+    file_name = file_location + 'baci92_'
+    single_country_run(file_name, False, False, False, False, False, False, False, False,False,"eunld","OEC_DB","mySQL")
     # Inputs = calculated_values,calculated_product_trends,calculated_trends,interesting trends, errors,final_errors,save,datalookup,plotter
     

@@ -6,7 +6,7 @@ Created on Jun 2, 2016
 import MySQLdb
 
 
-def make_table(year,arg):
+def make_table(year,arg, multi = False):
     (table_name,database) = arg
     db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)        
     mysql_cur = db.cursor()
