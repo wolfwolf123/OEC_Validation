@@ -39,12 +39,65 @@ def make_table(year,arg):
                 print("Failed %s_%s Creation" % (table_name,year))
                 db.rollback()
     db.close()
+def delete(table_name,label,database):
+    db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
+    mysql_cur = db.cursor()
+    try:
+        sql ="DELETE FROM %s WHERE label = '%s' " % (table_name,label)
+    except:
+        print (table_name,label)
+        return False
+    try:
+        # Execute the SQL command
+        mysql_cur.execute(sql)
+        # Commit your changes in the database
+        db.commit()
+    except:
+        # Rollback in case there is any error
+        db.rollback()
+    db.close()
+def deleteLike(table_name,database,args):
+    
+    sql = "DELETE FROM %s WHERE " % (table_name)
+    for arg in args:
+        sql += "label LIKE '%" + arg + "%' and "
+    
+    sql = sql[:-4]
+     
+    db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
+    mysql_cur = db.cursor()  
+    try:
+        # Execute the SQL command
+        mysql_cur.execute(sql)
+        # Commit your changes in the database
+        db.commit()
+    except:
+        # Rollback in case there is any error
+        db.rollback()
+    db.close()
 def insert(table_name, label, value,database):
     db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
     mysql_cur = db.cursor()
     try:
-#         sql ="""INSERT INTO %s VALUES ('%s',%f)
-#               ON DUPLICATE KEY UPDATE VALUE=VALUE+%f;""" % (table_name,label,float(value),float(value))
+        sql ="""INSERT INTO %s VALUES ('%s',%f)
+                ON DUPLICATE KEY UPDATE VALUE=VALUE+%f;""" % (table_name,label,float(value),float(value))
+    except:
+        print (table_name,label,value)
+        return False
+    try:
+    # Execute the SQL command
+        mysql_cur.execute(sql)
+#             print("UPDATE")
+        # Commit your changes in the database
+        db.commit()
+    except:
+        # Rollback in case there is any error
+        db.rollback()
+    db.close()
+def insertReplace(table_name, label, value,database):
+    db = MySQLdb.connect(host="localhost",user="root",passwd="enKibc43",db=database)
+    mysql_cur = db.cursor()
+    try:
         sql ="INSERT INTO %s VALUES ('%s',%f)" % (table_name,label,float(value))
     except:
         print (table_name,label,value)
