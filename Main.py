@@ -793,7 +793,7 @@ def getProductCode(product):
 def getProduct(product, year):
     try:
         value = product_values["%s-%s" % (year,product)]
-        print (value,"%s-%s" % (year,product))
+#         print (value,"%s-%s" % (year,product))
 #             print ("Value",value)
 #         print(product)
 #         print(value)
@@ -807,7 +807,7 @@ def getProduct(product, year):
 #    This will run through the collected data and return the Total Product for a given year and country
 def getProductCountry(product,country,year,tag):
     try:
-        print (country_product_values["%s-%s-%s~%s" % (year,country,product,tag)],"%s-%s-%s~%s" % (year,country,product,tag))
+#         print (country_product_values["%s-%s-%s~%s" % (year,country,product,tag)],"%s-%s-%s~%s" % (year,country,product,tag))
 
         return country_product_values["%s-%s-%s~%s" % (year,country,product,tag)]
 
@@ -890,10 +890,10 @@ def plot(inputs):
             else:
                 points.append(getProductCountry(product,country,year,tag) * 1000)
                 point_market.append(getProduct(product,year) * 1000)
-                if (getProduct(product[:-2],year) > getProduct(product,year) * too_large_market):
-                    point_overmarket.append(getProduct(product,year) * 1000)
-                else:
-                    point_overmarket.append(getProduct(product[:-2],year)* 1000)
+#                 if (getProduct(product[:-2],year) > getProduct(product,year) * too_large_market):
+                point_overmarket.append(getProduct(product,year) * 1000)
+#                 else:
+#                     point_overmarket.append(getProduct(product[:-2],year)* 1000)
 
         print (points) 
         plt.plot(x,points)
