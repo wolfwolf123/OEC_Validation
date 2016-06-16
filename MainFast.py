@@ -7,12 +7,20 @@ This program serves to find possible erroneous data point in the data provided b
 
 '''
 import csv
+import plotly
+from plotly.graph_objs import Scatter, Layout
+import plotly.plotly as py
+from plotly.graph_objs import *
 import threading
 import time
-from itertools import *
 import matplotlib.pyplot as plt
-
-
+import os
+import StringIO
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+from flask import Flask, make_response
+from matplotlib.dates import DateFormatter
+from Main import relative_threashold
 local_shift_threshold = 1.5
 # This accounts the relative size of the values to the left and right of this value
 
@@ -24,6 +32,8 @@ absolute_threshold = 50000 # 50,000,000 50 Million
 
 market_threshold = .15
 # This is the percent of the market that a trade must make up in-order to be considered relevant
+
+relative_threashold = 1
 
 first_year = 2009
 # The first year that is recorded
@@ -60,7 +70,7 @@ total_csv = 0
 
 
 # This computes the relevant data for a single given country
-def single_country_run (file_name,datalookup,plot,country):
+def single_country_run (file_name,datalookup,ploting,country):
     # These Inputs are booleans, with the exception of file_name which denotes the file from which to retrieve the data, of what parts of the code
     # Should be used. If a value is denoted false the associated table WILL BE DELETED to be replaced with new values. Saved, if True, will save all
     # Other values that are denoted as completed, e.g. are True. Datalookup will allow you to search collected data
@@ -69,7 +79,7 @@ def single_country_run (file_name,datalookup,plot,country):
     print("Initilizing...")
     initilize()
 #     single_thread(preprocess,first_year,last_year, arg = file_name)
-    single_thread(getFilesNotProcessed,first_year,last_year,arg=(file_name,'528'))
+    single_thread(getFilesPreProcessed,first_year,last_year,arg=(file_name,'528'))
 #  
     findLikelyErrors()
 # #     if (not final_errors):
@@ -80,7 +90,10 @@ def single_country_run (file_name,datalookup,plot,country):
 #         plotter()
     end = time.time()
     print(end - start)
-
+    call =[]
+    for error in final_errors:
+        call.append(error.split(","))
+    return plot(call)
 
     
 # This allows a program to be multithreaded to add increased efficiency to processing
@@ -118,7 +131,9 @@ def single_thread(function,min_val,max_val, arg="None", multi =False):
         function(val,arg,multi)
         
 def preprocess(year,file_tag,multi):
-    
+    newpath = file_tag + str(year) + "/"  
+    if not os.path.exists(newpath):
+        os.makedirs(newpath)
     file_name = file_tag + str(year) + ".csv"
     
     with open(file_name) as csvfile:
@@ -140,7 +155,7 @@ def preprocess(year,file_tag,multi):
 #             
             if (last_key != key and data != []):
 
-                save(file_tag,last_key,year,data)
+                save(newpath,last_key,year,data)
                 data = []
 
                 start = end 
@@ -230,7 +245,7 @@ def getFilesNotProcessed(year,arg,multi=False):
                 value = float(column[4])
                 
                 # This saves all of the specific country product pairs to ensure that only the pairs that are in the list are examined
-                used_codes[product +"-" + country] = product +"-" + country
+                used_codes[product +"-" + country] =  used_codes.get("%s-%s" % (product,country),0) + value
 
                 product_values["%s-%s" % (year,product)] = product_values.get("%s-%s" % (year,product),0) + value
                 country_product_values["%s-%s-%s~%s" % (year,country,product,"Import")] = value
@@ -244,7 +259,7 @@ def getFilesPreProcessed(year,arg,key, multi=False):
 
     (filename,key) = arg
 
-    file_location = filename +  key + "_" + str(year) + '.csv'    
+    file_location = filename + str(year) + "//"  + key + "_" + str(year) + '.csv'    
     
     with open(file_location) as csvfile:
         reader = csv.reader(csvfile)
@@ -263,7 +278,7 @@ def getFilesPreProcessed(year,arg,key, multi=False):
                 value = float(column[4])
                 
                 # This saves all of the specific country product pairs to ensure that only the pairs that are in the list are examined
-                used_codes[product +"-" + country] = product +"-" + country
+                used_codes[product +"-" + country] =  used_codes.get("%s-%s" % (product,country),0) + value
 
                 product_values["%s-%s" % (year,product)] = product_values.get("%s-%s" % (year,product),0) + value
                 country_product_values["%s-%s-%s~%s" % (year,country,product,"Import")] = value
@@ -283,10 +298,9 @@ def findLikelyErrors():
         for key in used_codes:
             (product,country) = key.split("-")
             
-            total = 0 
-
-            for year in range (first_year, last_year+1):
-                total += getProductCountry(product,country, year,tag)
+            total = used_codes[key] 
+#             for year in range (first_year, last_year+1):
+#                 total += getProductCountry(product,country, year,tag)
               
             if total/3 < absolute_threshold:
                 continue
@@ -327,9 +341,18 @@ def findLikelyErrors():
                         
                         if ( market_val == 0 or three_year_average/market_val > market_threshold):    
                             label = "%s-%s|%s~%s" % (product,country,year,tag)
-                        
-                         
-                            errors[label]  = local_shift
+                            index = year - first_year
+                            
+                            three_year_net = totals[min(last_year-first_year,index + 1)] - totals[max(0,index-1)]
+                            
+                            expected_shift = three_year_net/2
+                            if (expected_shift == 0):
+                                off_from_trend = relative_threashold + 1 
+                            else:
+                                off_from_trend = (value - expected_shift)/expected_shift
+
+                            if (abs(off_from_trend) > relative_threashold or abs(local_shift) >= local_shift_threshold * 2):
+                                errors[label]  = local_shift
 def filter_errors():
     global errors
     added_errors = {}
@@ -353,8 +376,8 @@ def filter_errors():
             final_errors[label] =  int(error.split("|")[1].split("~")[0])
 
 
-    for error in final_errors:
-        print (error,final_errors[error])
+#     for error in final_errors:
+#         print (error,final_errors[error])
 
 
 def getProduct(product, year):
@@ -407,6 +430,12 @@ def plotter():
             args.append(call)
             print (call, "Not found")
         plot (args)
+def plotWithPlotly():
+    
+    plotly.offline.plot({
+        "data": [Scatter(x=[1, 2, 3, 4], y=[4, 3, 2, 1])],
+        "layout": Layout(title="hello world")
+    })
 def plot(inputs):
         
     fig, ax = plt.subplots()
@@ -414,7 +443,8 @@ def plot(inputs):
     # We need to draw the canvas, otherwise the labels won't be positioned and 
     # won't have values yet.
     fig.canvas.draw()
-    
+    fig.set_size_inches(17, 10.5)
+
     for arg in inputs:
         points = []
         point_market = []
@@ -436,27 +466,33 @@ def plot(inputs):
                 return None
             elif(country == None or country == "" ):
                 points.append(getProduct(product,year)* 1000)
-                point_market.append(getProduct(product[:-2],year)* 1000)
-                point_overmarket.append(getProduct(product[:-2],year)* 1000)
+#                 point_market.append(getProduct(product[:-2],year)* 1000)
+#                 point_overmarket.append(getProduct(product[:-2],year)* 1000)
     #         DEPRECATED
     #         elif(product == None):
     #             points.append(Main.getCountry(country,year))
             else:
                 points.append(getProductCountry(product,country,year,tag) * 1000)
-                point_market.append(getProduct(product,year) * 1000)
+#                 point_market.append(getProduct(product,year) * 1000)
 #                 if (getProduct(product[:-2],year) > getProduct(product,year) * too_large_market):
-                point_overmarket.append(getProduct(product,year) * 1000)
+#                 point_overmarket.append(getProduct(product,year) * 1000)
 #                 else:
 #                     point_overmarket.append(getProduct(product[:-2],year)* 1000)
 
         print (points) 
         plt.plot(x,points)
-        plt.plot(x,point_market)
-        plt.plot(x,point_overmarket)
+#         plt.plot(x,point_market)
+#         plt.plot(x,point_overmarket)
 
     plt.ylabel('Value of Trade ($)')
     plt.xlabel('Country:%s,Product:%s,Years from %s to %s' % (country,product,first_year,last_year))
-    plt.show()   
+    fig.tight_layout()
+    canvas=FigureCanvas(fig)
+    png_output = StringIO.StringIO()
+    canvas.print_png(png_output)
+    response = make_response(png_output.getvalue())
+    response.headers['Content-Type'] = 'image/png'
+    return (response)
 # def plot(min,max,product= None,country = None, tag = "Export"):
 #     points = []
 #     
@@ -495,5 +531,31 @@ if __name__ == '__main__':
         
     file_name = file_location + 'baci92_'
     single_country_run(file_name, False, False, "eunld")
+#     import plotly.plotly as py
+#     import plotly.graph_objs as go
+#     
+#     # Sign in to plotly
+#     py.sign_in('DemoAccount', '1gf0wk3') # Replace the username, and API key with your credentials.
+#     trace0 = Scatter(
+#         x=[1, 2, 3, 4],
+#         y=[10, 15, 13, 17]
+#     )
+#     trace1 = Scatter(
+#         x=[1, 2, 3, 4],
+#         y=[16, 5, 11, 9]
+#     )
+#     data = Data([trace0, trace1])
+# 
+#     # Create a simple chart..
+# #     trace = go.Bar(x=[2, 4, 6], y= [10, 12, 15])
+# #     data = [trace]
+#     layout = go.Layout(title='A Simple Plot', width=800, height=640)
+#     fig = go.Figure(data=data, layout=layout)
+    
+    py.image.ishow(fig)
+    
+    py.image.save_as(fig, filename='a-simple-plot.png')
+        
+
 # def single_country_run (file_name,datalookup,plot,country,database,type):
     

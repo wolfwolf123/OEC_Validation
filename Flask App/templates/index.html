@@ -1,0 +1,22 @@
+<html>
+  <head>
+    <title>"This is a test title"</title>
+  </head>
+  <body>
+
+  	<div style = "float:right" id="picture">
+    	<img id = "pic" src="{{ graph }}" alt="Test" height="75%" width="80%">
+    	
+  	</div>    
+  	<form action="{{ url_for('simple') }}" method=post class=add-entry>
+      <dl>
+        <dt>Title:
+        <dd><input type=text size=30 name=title>
+        <dt>Text:
+        <dd><textarea name=text rows=5 cols=40></textarea>
+        <dd><input type=submit value=Share>
+      </dl>
+    </form>
+  
+  </body>
+</html>
