@@ -58,6 +58,8 @@ saved_trends = {}
 product_values = {}
 # This stores the information regarding the trade of a product to increase efficiency
 
+country_values = {}
+
 saved_product_trends = {}
 # This stores the information regarding product trends in trade between two countries to increase efficiency
 
@@ -790,6 +792,12 @@ def getProductCode(product):
             if (i == int(product)):
                 return product_codes[i]
 
+def getCountry(country,year):
+    try:
+        value = country_value["%s-%s" % (year,country)]
+        return value
+    except:
+        return 0
 def getProduct(product, year):
     try:
         value = product_values["%s-%s" % (year,product)]

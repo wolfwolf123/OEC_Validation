@@ -3,6 +3,7 @@ Created on Jun 2, 2016
 
 @author: chris
 '''
+from Main import country_codes
 
 first_year = 2009
 

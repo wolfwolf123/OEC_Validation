@@ -1,22 +1,92 @@
 <html>
   <head>
-    <title>"This is a test title"</title>
+    <title>"This is a test title"</title>    
   </head>
   <body>
-
-  	<div style = "float:right" id="picture">
-    	<img id = "pic" src="{{ graph }}" alt="Test" height="75%" width="80%">
-    	
-  	</div>    
-  	<form action="{{ url_for('simple') }}" method=post class=add-entry>
-      <dl>
-        <dt>Title:
-        <dd><input type=text size=30 name=title>
-        <dt>Text:
-        <dd><textarea name=text rows=5 cols=40></textarea>
-        <dd><input type=submit value=Share>
-      </dl>
+	<style>
+		input[type='range'] {
+		    -webkit-appearance: none;
+		    appearance: none;
+		    -moz-appearance: none;
+		    border-radius: 5px;
+		    box-shadow: inset 1px 1px 1px rgba(000,000,000,0.25);
+		    background-color: #FFF;
+		    height: 8px;
+		    vertical-align: middle;
+		    width: 200px;
+		}
+		input[type=range]::-webkit-slider-runnable-track {
+		    -webkit-appearance: none;
+		    appearance: none;
+		    border-radius: 5px;
+		    box-shadow: inset 1px 1px 1px rgba(000,000,000,0.25);
+		    background-color: #FFF;
+		    height: 10px;
+		    vertical-align:middle;
+		    border:solid 1px rgba(0,0,0,0.25);
+		}
+		input[type='range']::-webkit-slider-thumb {
+		    -webkit-appearance: none;
+		    border-radius: 10px;
+		    background-color: #FFF;
+		    box-shadow:inset 0px 1px 0px rgba(000,000,000,0.5);
+		    border: 1px solid #999;
+		    height: 20px;
+		    width: 7px;
+		    vertical-align:middle;
+		    margin-top: -6px;
+		}
+		input[type='range']::-moz-range-track {
+		    -moz-appearance: none;
+		    border-radius: 5px;
+		    box-shadow: inset 1px 1px 1px rgba(000,000,000,0.25);
+		    background-color: #FFF;
+		    height: 8px;
+		    border:solid 1px rgba(0,0,0,0.25);
+		    vertical-align:middle;
+		    margin:0;
+		    padding:0;
+		}
+		input[type='range']::-moz-range-thumb {
+		    -moz-appearance: none;
+		    border-radius: 10px;
+		    background-color: #FFF;
+		    box-shadow:inset 0px 1px 0px rgba(000,000,000,0.5);
+		    border: 1px solid #999;
+		    height: 20px;
+		    width: 5px;
+		}
+		ul li {
+			padding: 20px 0 0px 0
+		}
+		
+	</style>
+	<img src = "{{ url_for('simple', country = title, local = local,absolute = absolute, market = market, trend = trend, volatility = volatility)}}" height = "90%" width = "75%" style = "float:right">  
+   	
+  	<form action="{{ url_for('images') }}" method=post class=add-entry>
+      <ul style="list-style-type:none">
+      <center>
+        <li>Country:
+        <li><input type=text size=30 name=title>
+        <li>Local Shift Threshold:
+        <li><input type="range" min="0" max="3" step=".1" value = "{{local}}" onchange = "local_shift_value.value = value" name = "local_shift">
+   		<li><output id="local_shift_value">{{local}}</output>
+  		<li>Absolute Value Threshold:
+		<li><input type="range" min="0" max="1000000" step="1000" value = "{{absolute}}" onchange = "absolute_value.value = value" name = "absolute">
+   		<li><output id="absolute_value">{{absolute}}</output>
+ 		<li>Market Threshold:
+		<li><input type="range" min="0" max=".5" step=".025" value = "{{market}}" onchange = "market_value.value = value" name = "market">
+   		<li><output id="market_value">{{market}}</output>
+   		<li>Trend Deviation Threshold:
+		<li><input type="range" min="0" max="2" step=".1" value = "{{trend}}" onchange = "trend_value.value = value" name = "trend">
+   		<li><output id="trend_value">{{trend}}</output>
+        <li>Volatility Threshold:
+		<li><input type="range" min="1" max="5" step="1" value = "{{volatility}}" onchange = "volatility_value.value = value" name = "volatility">
+   		<li><output id="volatility_value">{{volatility}}</output>
+        <li><input type=submit value="Generate Visualizations">
+      </center>
+      </ul>
+      
     </form>
-  
   </body>
 </html>
