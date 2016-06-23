@@ -62,7 +62,7 @@
   </head>
   <body>
 
-	<img src = "{{ url_for('product_trends', country = title, relative = relative,absolute = absolute, market = market, trend = trend)}}" height = "90%" width = "75%" style = "float:right">  
+	<img src = "{{ url_for('product_trends', country = title, relative = relative,absolute = absolute, market = market, trendline = trendline)}}" height = "90%" width = "75%" style = "float:right">  
 	
   	<form action="{{ url_for('display_products') }}" method=post class=add-entry>
       <ul style="list-style-type:none">
@@ -78,7 +78,13 @@
  		<li>Market Threshold:
 		<li><input type="range" min="0" max="1" step=".05" value = "{{market}}" onchange = "market_value.value = value" name = "market">
    		<li><output id="market_value">{{market}}</output>
-
+		<li>Trendline:
+        <li><select name=trendline>
+	        <option value="All">All</option>
+		    <option value="One Year">One Year</option>
+		    <option value="Three Years">Three Years</option>
+		    <option value="Five Years">Five Years</option>
+	    </select>
         <li><input type=submit value="Generate Visualizations">
       </center>
       </ul>

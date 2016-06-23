@@ -79,21 +79,23 @@ threads = []
 finished_threads = 0
 num_threads = 0 
 errors = {}
-# file_location = r'/home/chris/UROP Data/'
-file_location = r'C:/Users/Chris Briere/UROP Data/'
+file_location = r'/home/chris/UROP Data/'
+# file_location = r'C:/Users/Chris Briere/UROP Data/'
 # data_file_location = r'/media/ramdisk/'
 total_loop = 0
 total_csv = 0
 
 # These allow for multi-threading
 
-def getTrends (file_name,country,product,relative =1,absolute=50000,market=.15):
+def getTrends (file_name,country,product,relative =1,absolute=50000,market=.15,trendline = "All"):
     global absolute_threshold
     global trend_threashold
     global relative_threashold
     global market_threshold
     
 #     print (product)
+    
+    
     
     start = time.time()
     
@@ -115,7 +117,7 @@ def getTrends (file_name,country,product,relative =1,absolute=50000,market=.15):
             
             keys.append(code)
     print (keys)
-    single_thread(getTrendsPreProcessed,first_year,last_year,arg=(file_name,keys,product))
+    single_thread(getTrendsPreProcessed,first_year,last_year,arg=(file_name,keys,product,trendline))
 
     findInterestingTrends(product_trends, country_trends)
 
@@ -334,6 +336,7 @@ def initilize():
         import_reader = csv.reader(csvfile, delimiter=';',dialect = 'unix')
         for column in import_reader:
 #             print(row)
+
             row = column[0].split(",")
             product_codes[row[1]] = row[0]
     
@@ -424,7 +427,7 @@ def getTrendsPreProcessed(year,arg, multi=False):
     used_products = {}
     used_countries ={}
   
-    (filename,keys,product) = arg
+    (filename,keys,product,trendline) = arg
 
 #     print(product)
     
@@ -475,16 +478,16 @@ def getTrendsPreProcessed(year,arg, multi=False):
                     country_values["%s-%s" % (year,country[:2])] = country_values.get("%s-%s" % (year,country[:2]),0) + used_countries[country]
                 
             if (product):
-                market_trends   = find_trends(used_markets,getProduct)
+                market_trends   = find_trends(used_markets,getProduct,trendline)
 
-                product_trends  = find_product_trends(market_trends,used_products)
+                product_trends  = find_product_trends(market_trends,used_products,trendline)
                 
 #                 for trend in market_trends:
 #                     print(trend)
                 product_trends.update(market_trends)
 
             else:
-                country_trends  = find_trends(used_countries,getCountry)
+                country_trends  = find_trends(used_countries,getCountry,trendline)
             
         
         except:
@@ -574,7 +577,7 @@ def findInterestingTrends (product_trends,country_trends):
     
     return interesting_trends
 
-def find_product_trends(market_trends,products):
+def find_product_trends(market_trends,products,trendline):
 
     output = {}
 
@@ -585,101 +588,114 @@ def find_product_trends(market_trends,products):
         if (products[product] < absolute_threshold):
             continue
 
-        five_year_val = getProduct(product, last_year-5)        
-        first_year_val= getProduct(product, first_year)
         last_year_val = getProduct(product, last_year)      
-        one_year_val  = getProduct(product, last_year-1)
-        three_year_val= getProduct(product, last_year-3)
-
-        if (one_year_val != 0):
-
-            one_year_trend = (last_year_val - one_year_val )/ abs(one_year_val)
-           
-            one_year_label = "%s-%s" % (product,"one_year_trend")
-            
-            
-            if (one_year_trend < 0):
-                if (one_year_trend == -1):
-                    output [one_year_label] = -100 
-                else:
-                    output [one_year_label] = 1/(1 - one_year_trend) - 1 - market_trends["%s-%s" % (product[:-2],"one_year_trend")]
-            else:
-                output [one_year_label] = one_year_trend - market_trends["%s-%s" % (product[:-2],"one_year_trend")]
-                
-            
-        elif(last_year_val > 0):
-            
-            one_year_label = "%s-%s" % (product,"one_year_trend")
-
-            output [one_year_label] = 1
-                      
-        if (three_year_val != 0):
-
-            three_year_trend = (last_year_val - three_year_val )/ abs(three_year_val)
-                      
-            three_year_trend_label = "%s-%s" % (product,"three_year_trend")
-                
-            if (three_year_trend < 0):
-                if (three_year_trend == -1):
-                    output [three_year_trend_label] = -100
-                else:
-                    output [three_year_trend_label] = 1/(1 - three_year_trend) - 1 -  market_trends["%s-%s" % (product[:-2],"three_year_trend")]
-            else:
-                output [three_year_trend_label] = three_year_trend -  market_trends["%s-%s" % (product[:-2],"three_year_trend")]
-            
-        elif(last_year_val > 0):
-            
-            three_year_trend_label = "%s-%s" % (product,"three_year_trend")
-
-            output [three_year_trend_label] = 1
-            
-        if (five_year_val != 0):
-
-            five_year_trend = (last_year_val - five_year_val )/ abs(five_year_val)
-          
-            five_year_trend_label = "%s-%s" % (product,"five_year_trend")
-            
-            output [five_year_trend_label] = five_year_trend
-            
-            if (five_year_trend < 0):
-                if (five_year_trend == -1):
-                    output [five_year_trend_label] = -100
-                else:
-                    output [five_year_trend_label] = 1/(1 - five_year_trend) - 1 -  market_trends["%s-%s" % (product[:-2],"five_year_trend")]
-            else:
-                output [five_year_trend_label] = five_year_trend -  market_trends["%s-%s" % (product[:-2],"five_year_trend")]
-            
-        elif(last_year_val > 0):
         
-            five_year_trend_label = "%s-%s" % (product,"five_year_trend")
+        if (trendline == "One Year" or trendline == "All"):
+            one_year_val  = getProduct(product, last_year-1)
+
+            if (one_year_val != 0):
+    
+                one_year_trend = (last_year_val - one_year_val )/ abs(one_year_val)
+               
+                one_year_label = "%s-%s" % (product,"one_year_trend")
+                
+                
+                if (one_year_trend < 0):
+                    if (one_year_trend == -1):
+                        output [one_year_label] = -100 
+                    else:
+                        output [one_year_label] = 1/(1 - one_year_trend) - 1 - market_trends["%s-%s" % (product[:-2],"one_year_trend")]
+                else:
+                    output [one_year_label] = one_year_trend - market_trends["%s-%s" % (product[:-2],"one_year_trend")]
+                    
+                
+            elif(last_year_val > 0):
+                
+                one_year_label = "%s-%s" % (product,"one_year_trend")
+    
+                output [one_year_label] = 1
+                          
+        if (trendline == "Three Years" or trendline == "All"):
+            three_year_val= getProduct(product, last_year-3)
+
+            if (three_year_val != 0):
+    
+                three_year_trend = (last_year_val - three_year_val )/ abs(three_year_val)
+                          
+                three_year_trend_label = "%s-%s" % (product,"three_year_trend")
+                    
+                if (three_year_trend < 0):
+                    if (three_year_trend == -1):
+                        output [three_year_trend_label] = -100
+                    else:
+                        output [three_year_trend_label] = 1/(1 - three_year_trend) - 1 -  market_trends["%s-%s" % (product[:-2],"three_year_trend")]
+                else:
+                    output [three_year_trend_label] = three_year_trend -  market_trends["%s-%s" % (product[:-2],"three_year_trend")]
+                
+            elif(last_year_val > 0):
+                
+                three_year_trend_label = "%s-%s" % (product,"three_year_trend")
+    
+                output [three_year_trend_label] = 1
+                     
+        if (trendline == "Five Years" or trendline == "All"):
+
+            five_year_val = getProduct(product, last_year-5)        
+
+            if (five_year_val != 0):
+            
+                five_year_trend = (last_year_val - five_year_val )/ abs(five_year_val)
+              
+                five_year_trend_label = "%s-%s" % (product,"five_year_trend")
+                
+                output [five_year_trend_label] = five_year_trend
+                
+                if (five_year_trend < 0):
+                    if (five_year_trend == -1):
+                        output [five_year_trend_label] = -100
+                    else:
+                        output [five_year_trend_label] = 1/(1 - five_year_trend) - 1 -  market_trends["%s-%s" % (product[:-2],"five_year_trend")]
+                else:
+                    output [five_year_trend_label] = five_year_trend -  market_trends["%s-%s" % (product[:-2],"five_year_trend")]
+                
+            elif(last_year_val > 0):
+            
+                five_year_trend_label = "%s-%s" % (product,"five_year_trend")
 
             output [five_year_trend_label] = 1
-                     
-        if (first_year_val != 0):
 
-            long_trend = (last_year_val - first_year_val )/ abs(first_year_val)
-
-            long_trend_label = "%s-%s" % (product,"long_trend")
-
-            output [long_trend_label] = long_trend
+        if (trendline == "All"):
             
-            if (long_trend < 0):
-                if (long_trend == -1):
-                    output [long_trend_label] = -100
-                else:
-                    output [long_trend_label] = 1/(1 - long_trend) - 1 -  market_trends["%s-%s" % (product[:-2],"long_trend")]
-            else:
-                output [long_trend_label] = long_trend -  market_trends["%s-%s" % (product[:-2],"long_trend")]
-        elif(last_year_val > 0):
-            
-            long_trend_label = "%s-%s" % (product,"long_trend")
-
-            output [long_trend_label] = 1
+            first_year_val= getProduct(product, first_year)
     
+           
+           
+                         
+            if (first_year_val != 0):
+    
+                long_trend = (last_year_val - first_year_val )/ abs(first_year_val)
+    
+                long_trend_label = "%s-%s" % (product,"long_trend")
+    
+                output [long_trend_label] = long_trend
+                
+                if (long_trend < 0):
+                    if (long_trend == -1):
+                        output [long_trend_label] = -100
+                    else:
+                        output [long_trend_label] = 1/(1 - long_trend) - 1 -  market_trends["%s-%s" % (product[:-2],"long_trend")]
+                else:
+                    output [long_trend_label] = long_trend -  market_trends["%s-%s" % (product[:-2],"long_trend")]
+            elif(last_year_val > 0):
+                
+                long_trend_label = "%s-%s" % (product,"long_trend")
+    
+                output [long_trend_label] = 1
+        
     return output
 
 
-def find_trends(data,accessor):
+def find_trends(data,accessor,trendline):
 
     output = {}
 
@@ -690,102 +706,113 @@ def find_trends(data,accessor):
         if (data[item] < absolute_threshold):
             continue
 
-        five_year_val = accessor(item, last_year-5)        
-        first_year_val= accessor(item, first_year)
         last_year_val = accessor(item, last_year)      
-        one_year_val  = accessor(item, last_year-1)
-        three_year_val= accessor(item, last_year-3)
         
 #         if (last_year_val < one_year_val):
 #             print (last_year_val,one_year_val)
 
         # Attempts to lower the calculation requirements by not calculating for items
         # that have no values in the data set given
-                        
-        if (one_year_val != 0):
+        if (trendline == "One Year" or trendline == "All"):
 
-            one_year_trend = (last_year_val - one_year_val )/ abs(one_year_val)
-           
-            one_year_label = "%s-%s" % (item,"one_year_trend")
-            
-            
-            if (one_year_trend < 0):
-                if (one_year_trend == -1):
-                    output [one_year_label] = -100
-                else:
-                    output [one_year_label] = 1/(1 - one_year_trend) - 1
-            else:
-                output [one_year_label] = one_year_trend
-            
-        elif(last_year_val > 0):
-            
-            one_year_label = "%s-%s" % (item,"one_year_trend")
+            one_year_val  = accessor(item, last_year-1)
 
-            output [one_year_label] = 1
-                      
-        if (three_year_val != 0):
-
-            three_year_trend = (last_year_val - three_year_val )/ abs(three_year_val)
-                      
-            three_year_trend_label = "%s-%s" % (item,"three_year_trend")
-                
-            if (three_year_trend < 0):
-                if (three_year_trend == -1):
-                    output [three_year_trend_label] = -100
-                else:
-                    output [three_year_trend_label] = 1/(1 - three_year_trend) - 1
-            else:
-                output [three_year_trend_label] = three_year_trend
-            
-        elif(last_year_val > 0):
-            
-            three_year_trend_label = "%s-%s" % (item,"three_year_trend")
-
-            output [three_year_trend_label] = 1
-            
-        if (five_year_val != 0):
-
-            five_year_trend = (last_year_val - five_year_val )/ abs(five_year_val)
-          
-            five_year_trend_label = "%s-%s" % (item,"five_year_trend")
-            
-            output [five_year_trend_label] = five_year_trend
-            
-            if (five_year_trend < 0):
-                if (five_year_trend == -1):
-                    output [five_year_trend_label] = -100
-                else:
-                    output [five_year_trend_label] = 1/(1 - five_year_trend) - 1
-            else:
-                output [five_year_trend_label] = five_year_trend
-            
-        elif(last_year_val > 0):
-        
-            five_year_trend_label = "%s-%s" % (item,"five_year_trend")
-
-            output [five_year_trend_label] = 1
-                     
-        if (first_year_val != 0):
-
-            long_trend = (last_year_val - first_year_val )/ abs(first_year_val)
-
-            long_trend_label = "%s-%s" % (item,"long_trend")
-
-            output [long_trend_label] = long_trend
-            
-            if (long_trend < 0):
-                if (long_trend == -1):
-                    output [long_trend_label] = -100
-                else:
-                    output [long_trend_label] = 1/(1 - long_trend) - 1
-            else:
-                output [long_trend_label] = long_trend
-        elif(last_year_val > 0):
-            
-            long_trend_label = "%s-%s" % (item,"long_trend")
-
-            output [long_trend_label] = 1
+            if (one_year_val != 0):
     
+                one_year_trend = (last_year_val - one_year_val )/ abs(one_year_val)
+               
+                one_year_label = "%s-%s" % (item,"one_year_trend")
+                
+                
+                if (one_year_trend < 0):
+                    if (one_year_trend == -1):
+                        output [one_year_label] = -100
+                    else:
+                        output [one_year_label] = 1/(1 - one_year_trend) - 1
+                else:
+                    output [one_year_label] = one_year_trend
+                
+            elif(last_year_val > 0):
+                
+                one_year_label = "%s-%s" % (item,"one_year_trend")
+    
+                output [one_year_label] = 1
+                      
+        if (trendline == "Three Years" or trendline == "All"):
+
+            three_year_val= accessor(item, last_year-3)
+
+    
+            if (three_year_val != 0):
+    
+                three_year_trend = (last_year_val - three_year_val )/ abs(three_year_val)
+                          
+                three_year_trend_label = "%s-%s" % (item,"three_year_trend")
+                    
+                if (three_year_trend < 0):
+                    if (three_year_trend == -1):
+                        output [three_year_trend_label] = -100
+                    else:
+                        output [three_year_trend_label] = 1/(1 - three_year_trend) - 1
+                else:
+                    output [three_year_trend_label] = three_year_trend
+                
+            elif(last_year_val > 0):
+                
+                three_year_trend_label = "%s-%s" % (item,"three_year_trend")
+    
+                output [three_year_trend_label] = 1
+            
+        if (trendline == "Five Years" or trendline == "All"):
+
+            five_year_val = accessor(item, last_year-5)        
+
+            if (five_year_val != 0):
+    
+                five_year_trend = (last_year_val - five_year_val )/ abs(five_year_val)
+              
+                five_year_trend_label = "%s-%s" % (item,"five_year_trend")
+                
+                output [five_year_trend_label] = five_year_trend
+                
+                if (five_year_trend < 0):
+                    if (five_year_trend == -1):
+                        output [five_year_trend_label] = -100
+                    else:
+                        output [five_year_trend_label] = 1/(1 - five_year_trend) - 1
+                else:
+                    output [five_year_trend_label] = five_year_trend
+                
+            elif(last_year_val > 0):
+            
+                five_year_trend_label = "%s-%s" % (item,"five_year_trend")
+    
+                output [five_year_trend_label] = 1
+        if (trendline == "All"):
+
+            first_year_val= accessor(item, first_year)
+                         
+            if (first_year_val != 0):
+    
+                long_trend = (last_year_val - first_year_val )/ abs(first_year_val)
+    
+                long_trend_label = "%s-%s" % (item,"long_trend")
+    
+                output [long_trend_label] = long_trend
+                
+                if (long_trend < 0):
+                    if (long_trend == -1):
+                        output [long_trend_label] = -100
+                    else:
+                        output [long_trend_label] = 1/(1 - long_trend) - 1
+                else:
+                    output [long_trend_label] = long_trend
+            elif(last_year_val > 0):
+                
+                long_trend_label = "%s-%s" % (item,"long_trend")
+    
+                output [long_trend_label] = 1
+        
     return output
 
 # This program will search through both the trends and the individual values of trades between two countries to ensure to detect possible errors

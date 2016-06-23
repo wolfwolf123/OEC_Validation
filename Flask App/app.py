@@ -50,14 +50,14 @@ def display_errors():
     except:
         market_value = .15
     try:
-        trend_value = request.form['trend']
+        trend_value = request.form['trendline']
     except:
         trend_value = 1   
     try:
         volatility_value = request.form['volatility']
     except:
         volatility_value = 3 
-    return render_template("errors.html", title = title, local = local_shift,absolute =absolute_value,market = market_value,trend=trend_value,volatility=volatility_value)    
+    return render_template("errors.html", title = title, local = local_shift,absolute =absolute_value,market = market_value,trendline=trend_value,volatility=volatility_value)    
 
 @app.route('/errors_img/<country>/', methods=['POST','GET'])
 @app.route('/errors_img/<country>/<local>', methods=['POST','GET'])
@@ -104,25 +104,26 @@ def display_countries():
     except:
         market_value = .15
     try:
-        trend_value = request.form['trend']
+        trend_value = request.form['trendline']
     except:
         trend_value = 1   
 
-    return render_template("countries.html", title = title, relative = relative,absolute =absolute_value,market = market_value,trend=trend_value)    
+    return render_template("countries.html", title = title, relative = relative,absolute =absolute_value,market = market_value,trendline=trend_value)    
 
 
 @app.route('/country_img/<country>/', methods=['POST','GET'])
 @app.route('/country_img/<country>/<relative>', methods=['POST','GET'])
 @app.route('/country_img/<country>/<relative>/<absolute>', methods=['POST','GET'])
 @app.route('/country_img/<country>/<relative>/<absolute>/<market>', methods=['POST','GET'])
-@app.route('/country_img/<country>/<relative>/<absolute>/<market>/<trend>', methods=['POST','GET'])
+@app.route('/country_img/<country>/<relative>/<absolute>/<market>/<trendline>', methods=['POST','GET'])
+
  
-def country_trends(country,relative = None,absolute= None, market =None, trend = None):
+def country_trends(country,relative = None,absolute= None, market = None, trendline = "All"):
  
-    print (country,relative,absolute,market,trend)
+    print (country,relative,absolute,market,trendline)
     file_name = file_location + 'baci92_'
 
-    plt = MainFast.getTrends(file_name, country,False,relative,absolute,market,trend)
+    plt = MainFast.getTrends(file_name, country,False,relative,absolute,market,trendline)
 
 
     f = tempfile.NamedTemporaryFile(
@@ -166,13 +167,14 @@ def display_products():
 @app.route('/product_img/<country>/<relative>', methods=['POST','GET'])
 @app.route('/product_img/<country>/<relative>/<absolute>', methods=['POST','GET'])
 @app.route('/product_img/<country>/<relative>/<absolute>/<market>', methods=['POST','GET'])
- 
-def product_trends(country,relative = None,absolute= None, market =None):
+@app.route('/product_img/<country>/<relative>/<absolute>/<market>/<trendline>', methods=['POST','GET'])
+
+def product_trends(country,relative = None,absolute= None, market =None,trendline = "All"):
  
     print (country,relative,absolute,market)
     file_name = file_location + 'baci92_'
 
-    plt = MainFast.getTrends(file_name, country,True,relative,absolute,market)
+    plt = MainFast.getTrends(file_name, country,True,relative,absolute,market,trendline)
 
 
     f = tempfile.NamedTemporaryFile(
