@@ -3,14 +3,12 @@ Created on Jun 2, 2016
 
 @author: chris
 '''
-from Main import country_codes
 
 first_year = 2009
 
 last_year  = 2014
 
 import SQL_Handler  
-import Main
 import MainFast
 
 country_trends = {}
@@ -19,78 +17,82 @@ interesting_trends = {}
 
 
 
-def find_product_trends(database,product_codes):
+def find_trends(data,accessor):
 
-    for product in product_codes:
+    output = {}
+
+    for item in data:
         # Find all the Long, Medium, and Short term Trends in products
     
 #             print (one_year_val)
-        if (product_codes[product] < MainFast.absolute_threshold):
+        if (data[item] < MainFast.absolute_threshold):
             continue
 
-        five_year_val = Main.getProduct(product, last_year-5)        
-        first_year_val= Main.getProduct(product, first_year)
-        last_year_val = Main.getProduct(product, last_year)      
-        one_year_val  = Main.getProduct(product, last_year-1)
-        three_year_val= Main.getProduct(product, last_year-3)
+        five_year_val = accessor(item, last_year-5)        
+        first_year_val= accessor(item, first_year)
+        last_year_val = accessor(item, last_year)      
+        one_year_val  = accessor(item, last_year-1)
+        three_year_val= accessor(item, last_year-3)
 
-        # Attempts to lower the calculation requirements by not calculating for products
+        # Attempts to lower the calculation requirements by not calculating for items
         # that have no values in the data set given
                         
         if (one_year_val != 0):
 
             one_year_trend = (last_year_val - one_year_val )/ one_year_val
            
-            one_year_label = "%s-%s" % (product,"one_year_trend")
+            one_year_label = "%s-%s" % (item,"one_year_trend")
             
-            product_trends [one_year_label] = one_year_trend
+            output [one_year_label] = one_year_trend
             
         elif(last_year_val > 0):
             
-            one_year_label = "%s-%s" % (product,"one_year_trend")
+            one_year_label = "%s-%s" % (item,"one_year_trend")
 
-            product_trends [one_year_label] = 1
+            output [one_year_label] = 1
                       
         if (three_year_val != 0):
 
             three_year_trend = (last_year_val - three_year_val )/ three_year_val
                       
-            three_year_trend_label = "%s-%s" % (product,"three_year_trend")
+            three_year_trend_label = "%s-%s" % (item,"three_year_trend")
     
-            product_trends [three_year_trend_label] = three_year_trend
+            output [three_year_trend_label] = three_year_trend
             
         elif(last_year_val > 0):
             
-            three_year_trend_label = "%s-%s" % (product,"three_year_trend")
+            three_year_trend_label = "%s-%s" % (item,"three_year_trend")
 
-            product_trends [three_year_trend_label] = 1
+            output [three_year_trend_label] = 1
             
         if (five_year_val != 0):
 
             five_year_trend = (last_year_val - five_year_val )/ five_year_val
           
-            five_year_trend_label = "%s-%s" % (product,"five_year_trend")
+            five_year_trend_label = "%s-%s" % (item,"five_year_trend")
             
-            product_trends [five_year_trend_label] = five_year_trend
+            output [five_year_trend_label] = five_year_trend
             
         elif(last_year_val > 0):
         
-            five_year_trend_label = "%s-%s" % (product,"five_year_trend")
+            five_year_trend_label = "%s-%s" % (item,"five_year_trend")
 
-            product_trends [five_year_trend_label] = 1
+            output [five_year_trend_label] = 1
                      
         if (first_year_val != 0):
 
             long_trend = (last_year_val - first_year_val )/ first_year_val
 
-            long_trend_label = "%s-%s" % (product,"long_trend")
+            long_trend_label = "%s-%s" % (item,"long_trend")
 
-            product_trends [long_trend_label] = long_trend
+            output [long_trend_label] = long_trend
         elif(last_year_val > 0):
             
-            long_trend_label = "%s-%s" % (product,"long_trend")
+            long_trend_label = "%s-%s" % (item,"long_trend")
 
-            product_trends [long_trend_label] = long_trend
+            output [long_trend_label] = long_trend
+    
+    return output
         
 def find_country_trends(database,country_codes):
    
@@ -100,11 +102,11 @@ def find_country_trends(database,country_codes):
 #             print (one_year_val)
         if (country_codes[country] < MainFast.absolute_threshold):
             continue
-        five_year_val = Main.getCountry(country, last_year-5)        
-        first_year_val= Main.getCountry(country, first_year)
-        last_year_val = Main.getCountry(country, last_year)      
-        one_year_val  = Main.getCountry(country, last_year-1)
-        three_year_val= Main.getCountry(country, last_year-3)
+        five_year_val = MainFast.getCountry(country, last_year-5)        
+        first_year_val= MainFast.getCountry(country, first_year)
+        last_year_val = MainFast.getCountry(country, last_year)      
+        one_year_val  = MainFast.getCountry(country, last_year-1)
+        three_year_val= MainFast.getCountry(country, last_year-3)
 
         # Attempts to lower the calculation requirements by not calculating for countrys
         # that have no values in the data set given
@@ -192,40 +194,54 @@ def findInterestingTrends (note = None):
             net = end -start
             
             if(abs(net) > MainFast.absolute_threshold):
-                label = "%s$%s" % (trend[0],net)
                 
-                interesting_trends[label] = trend_val
+                if (len(product)<7):
+                    market_val = 1
+                else:
+                    total = 0 
+                    for y in range (year,last_year):
+                        total += MainFast.getProduct(product[:-2],y)
+                    market_average = total/(last_year - year + 1)
+                    total = 0 
+                    for y in range (year,last_year):
+                        total += MainFast.getProduct(product,y)
+                    product_average = total/(last_year - year + 1)
+                    market_val = product_average/market_average
+                if (market_val > MainFast.market_threshold):
+                    label = "%s$%s" % (trend[0],net)
+                    
+                    interesting_trends[label] = trend_val
             
             
     for trend in country_trends:
-                
-        product = trend[0].split("|")[0].split("-")[0]
-        trendline = trend[0].split("|")[0].split("-")[1]
-        country = trend[0].split("|")[1].split("~")[0]
         
-        tag = trend[0].split("|")[1].split("~")[1]
-     
-        getTrendYear(trendline)
-                   
-        start = getProductCountry(product,country,year,tag)
-        
-        end = getProductCountry(product,country,last_year,tag)
+        trend_val = trend[1]       
+         
+        if (trend_val >= MainFast.absolute_threshold):
 
-        net = end -start
-                
-        trend_val   = trend[1]
-
-        # If the value of the trend (i.e. -.5 or a 50% decrease) times the size of the market (i.e. $1 billion dollars) is greater than the 
-        # absolute threshold then insert the value into interesting trends
-        
-        if (abs(net) > absolute_threshold and abs(trend_val) >= .25):
+            trendline = trend[0].split("-")[0]
             
-            if (note == None):
-                label = "%s-%s|%s~%s$%s" % (product,trendline,country,tag,net)
-            else:
-                label = "%s-%s|%s~%s$%s@%s" % (product,trendline,country,tag,net,note)
-
-            SQL_Handler.insert("interesting_trends",label,trend_val,database)
+            country = trend[0].split("-")[1]
+                     
+            year = getTrendYear(trendline)
+                       
+            start = MainFast.getCountry(country,year)
+            
+            end = MainFast.getCountry(country,last_year)
+    
+            net = end - start
+                    
+    
+            # If the value of the trend (i.e. -.5 or a 50% decrease) times the size of the market (i.e. $1 billion dollars) is greater than the 
+            # absolute threshold then insert the value into interesting trends
+            
+            if (abs(net) > MainFast.absolute_threshold):
+                
+                label = "%s$%s" % (trend[0],net)
+            
+                interesting_trends[label] = trend_val
+    
+    return interesting_trends
 def getTrendYear(trendline):
     if (trendline == "five_year_trend"):
         return last_year - 5

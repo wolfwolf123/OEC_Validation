@@ -1,7 +1,7 @@
 <html>
   <head>
-    <title>"This is a test title"</title>    
-  <style>
+    <title>"This is a test title"</title>   
+    <style>
 		input[type='range'] {
 		    -webkit-appearance: none;
 		    appearance: none;
@@ -58,25 +58,25 @@
 			padding: 20px 0 0px 0
 		}
 		
-	</style>
+</style> 
   </head>
   <body>
+
+	<img src = "{{ url_for('errors', country = title, local = local,absolute = absolute, market = market, trend = trend, volatility = volatility)}}" height = "90%" width = "75%" style = "float:right">  
 	
-<!-- 	<img src = "{{ url_for('errors', country = title, local = local,absolute = absolute, market = market, trend = trend, volatility = volatility)}}" height = "90%" width = "75%" style = "float:right">  
-   	-->
-  	<form action="{{ url_for('images') }}" method=post class=add-entry>
+  	<form action="{{ url_for('display_errors') }}" method=post class=add-entry>
       <ul style="list-style-type:none">
       <center>
         <li>Country:
-        <li><input type=text size=30 name=title>
+        <li><input type=text size=30 name=title value ="{{title}}">
         <li>Local Shift Threshold:
         <li><input type="range" min="0" max="3" step=".1" value = "{{local}}" onchange = "local_shift_value.value = value" name = "local_shift">
    		<li><output id="local_shift_value">{{local}}</output>
   		<li>Absolute Value Threshold:
-		<li><input type="range" min="0" max="1000000" step="1000" value = "{{absolute}}" onchange = "absolute_value.value = value" name = "absolute">
+		<li><input type="range" min="0" max="1000000" step="5000" value = "{{absolute}}" onchange = "absolute_value.value = value" name = "absolute">
    		<li><output id="absolute_value">{{absolute}}</output>
  		<li>Market Threshold:
-		<li><input type="range" min="0" max=".5" step=".025" value = "{{market}}" onchange = "market_value.value = value" name = "market">
+		<li><input type="range" min="0" max="1" step=".05" value = "{{market}}" onchange = "market_value.value = value" name = "market">
    		<li><output id="market_value">{{market}}</output>
    		<li>Trend Deviation Threshold:
 		<li><input type="range" min="0" max="2" step=".1" value = "{{trend}}" onchange = "trend_value.value = value" name = "trend">
