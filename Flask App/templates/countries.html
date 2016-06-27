@@ -73,13 +73,13 @@
         <li><input type="range" min="0" max="3" step=".1" value = "{{relative}}" onchange = "relative_value.value = value" name = "relative">
    		<li><output id="relative_value">{{relative}}</output>
   		<li>Absolute Value Threshold:
-		<li><input type="range" min="0" max="1000000" step="5000" value = "{{absolute}}" onchange = "absolute_value.value = value" name = "absolute">
+		<li><input type="range" min="0" max=".003" step=".000001" value = "{{absolute}}" onchange = "absolute_value.value = value" name = "absolute">
    		<li><output id="absolute_value">{{absolute}}</output>
  		<li>Market Threshold:
 		<li><input type="range" min="0" max="1" step=".05" value = "{{market}}" onchange = "market_value.value = value" name = "market">
    		<li><output id="market_value">{{market}}</output>	
 		<li>Trendline:
-        <li><select name=trendline>
+        <li><select name=trendline value = "{{trendline}}">
 	        <option value="All">All</option>
 		    <option value="One Year">One Year</option>
 		    <option value="Three Years">Three Years</option>

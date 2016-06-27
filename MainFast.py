@@ -36,7 +36,7 @@ trend_threashold = 1
 
 relative_threashold = 1 
 
-first_year = 2009
+first_year = 2001
 # The first year that is recorded
 
 last_year  = 2014
@@ -79,11 +79,13 @@ threads = []
 finished_threads = 0
 num_threads = 0 
 errors = {}
-file_location = r'/home/chris/UROP Data/'
-# file_location = r'C:/Users/Chris Briere/UROP Data/'
+# file_location = r'/home/chris/UROP Data/'
+file_location = r'C:/Users/Chris Briere/UROP Data/'
 # data_file_location = r'/media/ramdisk/'
 total_loop = 0
 total_csv = 0
+
+total_country_value = 0
 
 # These allow for multi-threading
 
@@ -92,20 +94,34 @@ def getTrends (file_name,country,product,relative =1,absolute=50000,market=.15,t
     global trend_threashold
     global relative_threashold
     global market_threshold
+    global interesting_trends
+    global product_values
+    global country_values
+    global product_trends
+    global country_trends
+    global market_trends
+    
+    product_trends = {}
+    country_trends = {}
+    product_values = {}
+    country_values = {}
+    market_trends = {}
     
 #     print (product)
     
     
+    absolute_threshold = 0
     
     start = time.time()
     
     initilize()
     
-    absolute_threshold = float(absolute)
+#     absolute_threshold = float(absolute)
     market_threshold = float(market)
     relative_threashold = float(relative)
+    absolute_threshold = float(absolute)
     
-    print (absolute_threshold,market_threshold,trend_threashold,relative_threashold)
+    print (product,absolute_threshold,market_threshold,trend_threashold,relative_threashold,trendline)
     
     keys = []
     for code in country_codes:
@@ -117,11 +133,28 @@ def getTrends (file_name,country,product,relative =1,absolute=50000,market=.15,t
             
             keys.append(code)
     print (keys)
+    
     single_thread(getTrendsPreProcessed,first_year,last_year,arg=(file_name,keys,product,trendline))
 
+#     absolute_threshold = float(absolute) * total_country_value
+
+    print ("Absolute", absolute_threshold)
+    
+    print("Total Country Value", total_country_value)
+
+    absolute_threshold = absolute_threshold * total_country_value
+
+    interesting_trends = {}
+    
+#     for i in interesting_trends:
+#         print ("Interesting Before:",i)
+    
     findInterestingTrends(product_trends, country_trends)
 
-    filter_trends()
+#     for i in interesting_trends:
+#         print ("Interesting After:",i);
+
+    filter_trends(getErrors())
 
     end = time.time()
     print(end - start)
@@ -133,47 +166,62 @@ def getTrends (file_name,country,product,relative =1,absolute=50000,market=.15,t
     return plot(country,call)
 
 # This computes the possible errors and returns a plot
-def getErrors (file_name,country,local=1.5,absolute=50000,market=.15,trend=1,volatility=3): 
+def getErrors (file_name,country,local=1.5,absolute=5,market=.15,trend=1,volatility=3): 
     global local_shift_threshold
     global absolute_threshold
     global trend_threashold
     global volatility_factor
     global market_threshold
+    global total_country_value
     
     start = time.time()
     print (file_name, country)
     initilize()
     
-    local_shift_threshold = float(local)
     absolute_threshold = float(absolute)
+    
+    local_shift_threshold = float(local)
     market_threshold = float(market)
     trend_threashold = float(trend)
     volatility_factor = float(volatility)
-    
+  
+    print("Absolute", absolute_threshold)
 
+    
+    total_country_value = 0 
         
     keys = []
     for code in country_codes:
         if (country) == country_codes[code]:
             keys.append(code)
     for code in country_names:
-        print (country_names[code])
+#         print (country_names[code])
         if (country) == country_names[code]:
             
             keys.append(code)            
     
     print (keys)
+    
     single_thread(getErrorsPreProcessed,first_year,last_year,arg=(file_name,keys))
+
+    absolute_threshold = absolute_threshold * total_country_value
+
+    print("Absolute", absolute_threshold)
 
     findLikelyErrors()
 
-    filter_errors()
-
     end = time.time()
     print(end - start)
+
+    return filter_errors()
+
+def getErrorsPlot(file_name,country,local=1.5,absolute=5,market=.15,trend=1,volatility=3):
+
+    final_errors = getErrors(file_name, country, local, absolute, market, trend, volatility)
+
     call =[]
     for error in final_errors:
-#         print (error)
+        print (error)
         call.append(error.split(","))
     return (plot(country,call))
 
@@ -260,12 +308,7 @@ def preprocess(year,file_tag,multi):
         for row in import_reader: 
             column = row[0].split(",")
             key = column[2]
-# 
-#             print (column)
-#             print (key)
-#             print (last_key)
-#             time.sleep(.5)
-#             
+
             if (last_key != key and data != []):
                 save(newpath,last_key,year,data)
                 
@@ -384,7 +427,8 @@ def getErrorsPreProcessed(year,arg, multi=False):
     global used_codes
     global product_values
     global country_product_values
-    
+    global total_country_value
+            
     (filename,keys) = arg
     for key in keys:
         file_location = filename + str(year) + "/"  + key + "_" + str(year) + '.csv'    
@@ -412,20 +456,34 @@ def getErrorsPreProcessed(year,arg, multi=False):
         
                         product_values["%s-%s" % (year,product)] = product_values.get("%s-%s" % (year,product),0) + value
                         country_product_values["%s-%s-%s~%s" % (year,country,product,"Import")] = value
-                   
+                        
+                        total_country_value += value
                     # Since the list is ordered once the last item with the correct key is called the program can exit
                     
                     elif (started):
                         break      
         except:
             pass
+
 def getTrendsPreProcessed(year,arg, multi=False):
 
     global product_trends
     global country_trends
+    global total_country_value
+    global product_values
+    global country_values
+    global absolute_threshold
+
+    total_country_value = 0
     
+#     print ("Failed")
+
+#     product_trends = {}
+#     country_trends = {}
     used_products = {}
     used_countries ={}
+
+    
   
     (filename,keys,product,trendline) = arg
 
@@ -434,6 +492,8 @@ def getTrendsPreProcessed(year,arg, multi=False):
     for key in keys:
 
         file_location = filename + str(year) + "/"  + key + "_" + str(year) + '.csv'    
+#         print (file_location)
+        
         try:
             with open(file_location) as csvfile:
                 reader = csv.reader(csvfile)
@@ -443,7 +503,7 @@ def getTrendsPreProcessed(year,arg, multi=False):
                 next(reader)     
                 
                 for column in reader:
-        #             print (column)
+#                     print (column)
                     if (column[2] == key):
                         started = True
                         
@@ -462,11 +522,16 @@ def getTrendsPreProcessed(year,arg, multi=False):
                         else:
                             country_values["%s-%s" % (year,country)] = country_values.get("%s-%s" % (year,country),0) + value
                    
+                        total_country_value += value
+
                     # Since the list is ordered once the last item with the correct key is called the program can exit
                     
                     elif (started):
+#                         print ("Failed")
                         break
-                    
+            
+            absolute_threshold_one_year = absolute_threshold * total_country_value
+
             used_markets ={}
             if (product):   
                 for product in used_products:
@@ -478,25 +543,31 @@ def getTrendsPreProcessed(year,arg, multi=False):
                     country_values["%s-%s" % (year,country[:2])] = country_values.get("%s-%s" % (year,country[:2]),0) + used_countries[country]
                 
             if (product):
-                market_trends   = find_trends(used_markets,getProduct,trendline)
+                market_trends   = find_trends(used_markets,getProduct,trendline,absolute_threshold_one_year)
 
-                product_trends  = find_product_trends(market_trends,used_products,trendline)
+                product_trends  = find_product_trends(market_trends,used_products,trendline,absolute_threshold_one_year)
                 
 #                 for trend in market_trends:
 #                     print(trend)
                 product_trends.update(market_trends)
 
             else:
-                country_trends  = find_trends(used_countries,getCountry,trendline)
+                country_trends  = find_trends(used_countries,getCountry,trendline,absolute_threshold_one_year)
             
+#             for product in product_values:
+#                 if (product_values[product] == 0):
+#                     print (product_values[product])
         
         except:
             pass
     
 def findInterestingTrends (product_trends,country_trends):
-            
+    global interesting_trends
+    interesting_trends = {}
+    
     # First it acquires the trends from the product trends 
-    print (relative_threashold)
+#     print (relative_threashold)
+    
     for trend in product_trends:
 
         product = trend.split("-")[0]
@@ -521,24 +592,33 @@ def findInterestingTrends (product_trends,country_trends):
             end = getProduct(product, last_year)
 
             net = end -start
-            
+            print ("Absolute",absolute_threshold,abs(net))
+
             if(abs(net) > absolute_threshold):
                 
-                if (len(product)<7):
-                    market_val = 1
+#                 print ("Absolute",absolute_threshold,abs(net))
+                
+                if (len(product)==4):
+                    market_val = 1.1
                 else:
                     total = 0 
                     for y in range (year,last_year):
                         total += getProduct(product[:-2],y)
                     market_average = total/(last_year - year + 1)
+
                     total = 0 
                     for y in range (year,last_year):
                         total += getProduct(product,y)
+
                     product_average = total/(last_year - year + 1)
-                    market_val = product_average/market_average
+                    if (product_average == 0):
+                        market_val = 0
+                    else:
+                        market_val = product_average/market_average
+#                     print (market_val)
                 if (market_val > market_threshold):
                     label = "%s$%s" % (trend,net)
-                    
+#                     print ("Absolute",absolute_threshold,abs(net),label)
                     interesting_trends[label] = trend_val
             
             
@@ -570,25 +650,33 @@ def findInterestingTrends (product_trends,country_trends):
             # absolute threshold then insert the value into interesting trends
             
             if (abs(net) > absolute_threshold):
+
+#                 print ("Absolute",absolute_threshold,abs(net))
                 
                 label = "%s$%s" % (trend,net)
-            
+                
+#                 print ("Absolute",absolute_threshold,abs(net),label)
+
                 interesting_trends[label] = trend_val
     
     return interesting_trends
 
-def find_product_trends(market_trends,products,trendline):
+def find_product_trends(market_trends,products,trendline,absolute_threshold_one_year):
 
     output = {}
+    print (trendline)
+
+    print ("One Year Threshold", absolute_threshold_one_year)
 
     for product in products:
         # Find all the Long, Medium, and Short term Trends in products
     
 #             print (one_year_val)
-        if (products[product] < absolute_threshold):
+        if (products[product] < absolute_threshold_one_year):
             continue
 
         last_year_val = getProduct(product, last_year)      
+        
         
         if (trendline == "One Year" or trendline == "All"):
             one_year_val  = getProduct(product, last_year-1)
@@ -695,15 +783,17 @@ def find_product_trends(market_trends,products,trendline):
     return output
 
 
-def find_trends(data,accessor,trendline):
+def find_trends(data,accessor,trendline,absolute_threshold_one_year):
 
     output = {}
-
+    
+    print (absolute_threshold_one_year)
+    
     for item in data:
         # Find all the Long, Medium, and Short term Trends in products
     
 #             print (one_year_val)
-        if (data[item] < absolute_threshold):
+        if (data[item] < absolute_threshold_one_year):
             continue
 
         last_year_val = accessor(item, last_year)      
@@ -820,6 +910,10 @@ def find_trends(data,accessor,trendline):
 def findLikelyErrors(codes = None):
 
     global used_codes
+    global errors
+    
+    errors = {}
+
 
 #     print (local_shift_threshold,absolute_threshold)
     # Runs through both True, and False
@@ -829,7 +923,7 @@ def findLikelyErrors(codes = None):
         total = used_codes[key] 
 #             for year in range (first_year, last_year+1):
 #                 total += getProductCountry(product,country, year,tag)
-          
+#         print (total/3, absolute_threshold)
         if total/3 < absolute_threshold:
             continue
   
@@ -839,10 +933,11 @@ def findLikelyErrors(codes = None):
             totals.append(getProductCountry(product,country, year,"Import"))
 
         three_year_averages = []
-        three_year_averages.append((totals[0]+totals[1]+totals[2])/3)
-        three_year_averages.append((totals[1]+totals[2]+totals[3])/3)
-        three_year_averages.append((totals[2]+totals[3]+totals[4])/3)
-        three_year_averages.append((totals[3]+totals[4]+totals[5])/3)
+        for index in range(0,last_year - first_year - 1):
+            three_year_averages.append((totals[index]+totals[index + 1]+totals[index + 2])/3)
+#         three_year_averages.append((totals[1]+totals[2]+totals[3])/3)
+#         three_year_averages.append((totals[2]+totals[3]+totals[4])/3)
+#         three_year_averages.append((totals[3]+totals[4]+totals[5])/3)
 
         for year in range(first_year+1,last_year):
         # This will not include 2014 as data there could be reasonable even though it seems erroneous
@@ -861,7 +956,6 @@ def findLikelyErrors(codes = None):
 #                         print(local_shift)
 
                     # This calculates the total size of the market so that the relative size of this value to the size of the market can be determined
-                        
                     market_val = getProduct(product, year)
 #                    
                             
@@ -870,22 +964,53 @@ def findLikelyErrors(codes = None):
                     
                     if ( market_val == 0 or three_year_average/market_val > market_threshold):    
                         label = "%s-%s|%s" % (product,country,year)
+                                                
                         index = year - first_year
 #                         print (label,local_shift)
-
-                        three_year_net = totals[min(last_year-first_year,index + 1)] - totals[max(0,index-1)]
+                        start_three = totals[max(0,index-1)]
                         
-                        expected_shift = three_year_net/2
-                        if (expected_shift == 0):
-                            off_from_trend = trend_threashold + 1 
+                        end_three = totals[min(last_year-first_year,index + 1)]
+                        
+                        three_year_net = end_three - start_three
+                        
+                        # Start: 500, End: 700, Expected: 600 
+                        # Expected_shift_three = 700 - 500 / 2 = 100
+                        # Off_from_trend_three = Value - 500 - 100 / 100
+                        # For Value = 655, 655 - 500 - 100 / 100 = 55/100 = .55
+                        # .55 < 1 Therefore this error would be rejected
+                        expected_shift_three = three_year_net/2
+                        if (expected_shift_three == 0):
+                            off_from_trend_three = trend_threashold + 1 
+                            print (label)
                         else:
-                            off_from_trend = (value - expected_shift)/expected_shift
-
-                        if (abs(off_from_trend) > trend_threashold or abs(local_shift) >= local_shift_threshold * 2):
+                            off_from_trend_three = ((value-start_three) - expected_shift_three)/expected_shift_three
+                            print ("Three",off_from_trend_three)
+                            print(trend_threashold)
+                        
+                        start_five = totals[0]
+                        
+                        end_five = totals[last_year-first_year]
+                        
+                        five_year_net = end_five - start_five
+                         
+                        expected_shift_five = (five_year_net) * index
+                       
+                        if (expected_shift_five == 0):
+                            off_from_trend_five = trend_threashold + 1 
+                            print (label)
+                        else:
+                            off_from_trend_five = (value - start_five - expected_shift_five)/expected_shift_five
+                            print ("Five",off_from_trend_five)
+                            print(trend_threashold)
+    
+                        if (abs(off_from_trend_three) >= trend_threashold and abs(off_from_trend_five) >= trend_threashold):
+                            print (label)
                             errors[label]  = local_shift
+                        
 def filter_errors():
     global errors
     added_errors = {}
+    not_error = {}
     
     for error in errors:
 #         print(error)
@@ -893,30 +1018,53 @@ def filter_errors():
         try:
             added_errors[label] += 1
             
+            print (added_errors[label])
+            
             # This will remove any field that coexist with another field, this will remove "High Volatility" Markets that simply react weirdly
             # (i.e. the Tanker market is made up almost entirely of 
             if (added_errors[label] >= volatility_factor - 1):
-                del error[label]
+                not_error[label] = 1
 
         except:
+            
+            print (label)
+
             added_errors[label] = 0
 #             print (label)
-            label = ",," + label.split("~")[0] + "," + error.split("|")[0].split("-")[1] + "," + label.split("~")[1]
 
-            final_errors[label] =  int(error.split("|")[1].split("~")[0])
+    for error in errors:
+        label = error.split("|")[0].split("-")[0] + "~" + error.split("|")[-1].split("~")[-1].split("$")[0]
 
+        try:
+            not_error[label]
+            continue
+        except:
+            pass
+        
+        label = ",," + label.split("~")[0] + "," + error.split("|")[0].split("-")[1] + "," + label.split("~")[1]
+    
+        final_errors[label] =  int(error.split("|")[1].split("~")[0])
+        
+    return final_errors
 
 #     for error in final_errors:
 #         print (error,final_errors[error])
 
 def filter_trends():
     global interesting_trends
+    global final_trends
     
+    final_trends = {}
+        
     used_label = {}
     
     for trend in interesting_trends:
         
+#         print (trend)
+        
         trendline = trend.split("$")[0].split("-")[-1]
+        
+#         print (trend.split("$")[-1])
         
         year = getTrendYear(trendline)
 #         if (not year):
@@ -956,10 +1104,14 @@ def filter_trends():
 
 
 def getProduct(product, year):
+#     for product in product_values:
+#         print("Products:",product,product_values[product])
     try:
         value = product_values["%s-%s" % (year,product)]
+#         print("%s-%s" % (year,product),value)
         return value
     except:
+#         print("%s-%s" % (year,product))
         return 0;
 def getCountry(country, year):
     try:
@@ -970,7 +1122,7 @@ def getCountry(country, year):
 #    This will run through the collected data and return the Total Product for a given year and country
 def getProductCountry(product,country,year,tag):
     try:
-        print (product,country,year,tag)
+#         print (product,country,year,tag)
         return country_product_values["%s-%s-%s~%s" % (year,country,product,tag)]
     except:
         return 0
@@ -1027,12 +1179,13 @@ def plotter():
 def plot(inp_country,inputs):
         
     fig, ax = plt.subplots()
-    
+    plots = []
+    plotLabels = []
     # We need to draw the canvas, otherwise the labels won't be positioned and 
     # won't have values yet.
     fig.canvas.draw()
     fig.set_size_inches(17, 10.5)
-    first_year = 2009
+    first_year = 2001
     last_year = 2014
 #     print (inputs)
     for arg in inputs:
@@ -1042,39 +1195,48 @@ def plot(inp_country,inputs):
         (min,max,product,country, tag) = arg
 
         if (min != "" or max != ""): 
-            first_year = int(min)
-            last_year = int(max)
+            first = int(min)
+            last = int(max)
 
+#         print ( arg)
 
         x = range(first_year,last_year+1)
-        
-        ax.set_xticklabels(x)
-    
+
+
         for year in range(first_year,last_year+1):
             if ((country == None or country == "") and (product == None or product == "")):
                 return None
             elif(country == None or country == "" ):
-                points.append(math.log( 1 + getProduct(product,year)* 1000))
+                points.append(getProduct(product,year)* 1000)
 #                 point_market.append(getProduct(product[:-2],year)* 1000)
 #                 point_overmarket.append(getProduct(product[:-2],year)* 1000)
             elif(product == None or product == ""):
-                points.append(math.log( 1 + getCountry(country,year) * 1000))
+                points.append(getCountry(country,year) * 1000)
             else:
-                points.append(math.log( 1 + getProductCountry(product,country,year,"Import") * 1000))
+                points.append(getProductCountry(product,country,year,"Import") * 1000)
+                
+
 #                 point_market.append(getProduct(product,year) * 1000)
 #                 if (getProduct(product[:-2],year) > getProduct(product,year) * too_large_market):
 #                 point_overmarket.append(getProduct(product,year) * 1000)
 #                 else:
 #                     point_overmarket.append(getProduct(product[:-2],year)* 1000)
 #         print (arg)
-
-#         print (points) 
-        plt.plot(x,points)
+#         for year in range (last,last_year+1):
+#             points.append(0)
+#         print (x,points) 
+        plt.plot(x,points,label = arg)
+        plotLabels.append(arg)
+        
 #         plt.plot(x,point_market)
 #         plt.plot(x,point_overmarket)
     
-    first_year = 2009
-    last_year = 2014
+#     first_year = 2009
+#     last_year = 2014
+#      
+    ax.set_xticklabels(range(2001,2015))
+    plt.legend()
+
     plt.ylabel('Value of Trade ($)')
     plt.xlabel('Country:%s,Years from %s to %s' % (inp_country,first_year,last_year))
     fig.tight_layout()

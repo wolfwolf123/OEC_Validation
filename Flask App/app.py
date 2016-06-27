@@ -44,20 +44,20 @@ def display_errors():
     try:
         absolute_value = request.form['absolute']
     except:
-        absolute_value = 50000    
+        absolute_value = .0001    
     try:
         market_value = request.form['market']
     except:
         market_value = .15
     try:
-        trend_value = request.form['trendline']
+        trend_value = request.form['trend']
     except:
         trend_value = 1   
     try:
         volatility_value = request.form['volatility']
     except:
         volatility_value = 3 
-    return render_template("errors.html", title = title, local = local_shift,absolute =absolute_value,market = market_value,trendline=trend_value,volatility=volatility_value)    
+    return render_template("errors.html", title = title, local = local_shift,absolute =absolute_value,market = market_value,trend=trend_value,volatility=volatility_value)    
 
 @app.route('/errors_img/<country>/', methods=['POST','GET'])
 @app.route('/errors_img/<country>/<local>', methods=['POST','GET'])
@@ -71,7 +71,7 @@ def errors(country,local = None,absolute= None, market =None, trend = None, vola
     print (country,local,absolute,market,trend,volatility)
     file_name = file_location + 'baci92_'
 
-    plt = MainFast.getErrors(file_name, country,local,absolute,market,trend,volatility)
+    plt = MainFast.getErrorsPlot(file_name, country,local,absolute,market,trend,volatility)
 
 
     f = tempfile.NamedTemporaryFile(
@@ -122,7 +122,9 @@ def country_trends(country,relative = None,absolute= None, market = None, trendl
  
     print (country,relative,absolute,market,trendline)
     file_name = file_location + 'baci92_'
-
+    
+    print (trendline)
+    
     plt = MainFast.getTrends(file_name, country,False,relative,absolute,market,trendline)
 
 
@@ -156,11 +158,12 @@ def display_products():
     except:
         market_value = .15
     try:
-        trend_value = request.form['trend']
+        trend_value = request.form['trendline']
     except:
         trend_value = 1   
-
-    return render_template("products.html", title = title, relative = relative,absolute =absolute_value,market = market_value,trend=trend_value)    
+#     print (trend_value)
+    
+    return render_template("products.html", title = title, relative = relative,absolute =absolute_value,market = market_value,trendline=trend_value)    
 
 
 @app.route('/product_img/<country>/', methods=['POST','GET'])
