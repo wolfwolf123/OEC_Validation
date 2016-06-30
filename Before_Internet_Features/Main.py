@@ -372,7 +372,7 @@ def save(year,table_name,arg=None):
             datawriter = csv.writer(mycsvfile)
             for row in data:
                 datawriter.writerow(row)
-        with open(table_name + ".csv", 'w') as mycsvfile:
+        with open(r'Files/' + table_name + ".csv", 'w') as mycsvfile:
             datawriter = csv.writer(mycsvfile)
             for row in data:
                 datawriter.writerow(row)
